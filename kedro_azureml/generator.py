@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Any, Dict, Optional, Type, Union
+from typing import Any, Dict, Optional, Type
 from uuid import uuid4
 
 from azure.ai.ml import (
@@ -12,20 +12,23 @@ from azure.ai.ml import (
     command,
 )
 from azure.ai.ml.dsl import pipeline as azure_pipeline
-from azure.ai.ml.entities import Environment, Job
+from azure.ai.ml.entities import Job
 from azure.ai.ml.entities._builders import Command
 from kedro.io import DataCatalog
 from kedro.pipeline import Pipeline
 from kedro.pipeline.node import Node
 
 from kedro_azureml.config import (
-    ComputeConfig,
+    ClusterConfig,
     KedroAzureMLConfig,
-    KedroAzureRunnerConfig,
+    PipelineFilterOptions,
 )
 from kedro_azureml.constants import (
     DISTRIBUTED_CONFIG_FIELD,
-    KEDRO_AZURE_RUNNER_CONFIG,
+    KEDRO_AZUREML_MLFLOW_ENABLED,
+    KEDRO_AZUREML_MLFLOW_EXPERIMENT_NAME,
+    KEDRO_AZUREML_MLFLOW_NODE_NAME,
+    KEDRO_AZUREML_MLFLOW_RUN_NAME,
     PARAMS_PREFIX,
 )
 from kedro_azureml.datasets import AzureMLAssetDataset
@@ -48,27 +51,33 @@ class AzureMLPipelineGenerator:
         kedro_params: Dict[str, Any],
         catalog: DataCatalog,
         aml_env: Optional[str] = None,
-        docker_image: Optional[str] = None,
         params: Optional[str] = None,
-        storage_account_key: Optional[str] = "",
         extra_env: Dict[str, str] = {},
         load_versions: Dict[str, str] = {},
+        filter_options: Optional[PipelineFilterOptions] = None,
+        mlflow_run_name: Optional[str] = None,
+        experiment_name: Optional[str] = None,
     ):
-        self.storage_account_key = storage_account_key
         self.kedro_environment = kedro_environment
 
         self.params = params
         self.kedro_params = kedro_params
         self.catalog = catalog
         self.aml_env = aml_env
-        self.docker_image = docker_image
         self.config = config
         self.pipeline_name = pipeline_name
         self.extra_env = extra_env
         self.load_versions = load_versions
+        self.filter_options = filter_options
+        self.mlflow_run_name = mlflow_run_name
+        self.experiment_name = experiment_name
 
     def generate(self) -> Job:
         pipeline = self.get_kedro_pipeline()
+        if self.filter_options:
+            filter_kwargs = self.filter_options.to_filter_kwargs()
+            if filter_kwargs:
+                pipeline = pipeline.filter(**filter_kwargs)
         kedro_azure_run_id = uuid4().hex
 
         logger.info(f"Translating {self.pipeline_name} to Azure ML Pipeline")
@@ -105,9 +114,9 @@ class AzureMLPipelineGenerator:
         pipeline: Pipeline = pipelines[self.pipeline_name]
         return pipeline
 
-    def get_target_resource_from_node_tags(self, node: Node) -> ComputeConfig:
+    def get_target_resource_from_node_tags(self, node: Node) -> ClusterConfig:
         resource_tags = set(node.tags).intersection(
-            set(self.config.azure.compute.keys())
+            set(self.config.compute.root.keys())
         )
         if len(resource_tags) > 1:
             raise ConfigException(
@@ -115,9 +124,9 @@ class AzureMLPipelineGenerator:
                 "a node can only have a maximum of 1 resource"
             )
         elif len(resource_tags) == 1:
-            return self.config.azure.compute[resource_tags.pop()]
+            return self.config.compute.resolve(resource_tags.pop())
         else:
-            return self.config.azure.compute["__default__"]
+            return self.config.compute.root["__default__"]
 
     def _sanitize_param_name(self, param_name: str) -> str:
         return re.sub(r"[^a-z0-9_]", "_", param_name.lower())
@@ -134,15 +143,8 @@ class AzureMLPipelineGenerator:
         else:
             return (params or self.kedro_params)[param_name]
 
-    def _resolve_azure_environment(self) -> Union[Environment, str]:
-        if image := (
-            self.docker_image
-            or (self.config.docker.image if self.config.docker else None)
-        ):
-            logger.info(f"Using docker image: {image} to run the pipeline.")
-            return Environment(image=image)
-        else:
-            return self.aml_env or self.config.azure.environment_name
+    def _resolve_azure_environment(self) -> str:
+        return self.aml_env or self.config.execution.environment
 
     def _get_versioned_azureml_dataset_name(
         self, catalog_name: str, azureml_dataset_name: str
@@ -157,7 +159,7 @@ class AzureMLPipelineGenerator:
     def _get_input(self, dataset_name: str, pipeline: Pipeline) -> Input:
         if self._is_param_or_root_non_azureml_asset_dataset(dataset_name, pipeline):
             return Input(type="string")
-        elif dataset_name in self.catalog.filter() and isinstance(
+        elif dataset_name in self.catalog and isinstance(
             ds := self.catalog[dataset_name], AzureMLAssetDataset
         ):
             if ds._azureml_type == "uri_file" and dataset_name not in pipeline.inputs():
@@ -169,7 +171,7 @@ class AzureMLPipelineGenerator:
             return Input(type="uri_folder")
 
     def _get_output(self, name):
-        if name in self.catalog.filter() and isinstance(
+        if name in self.catalog and isinstance(
             ds := self.catalog[name], AzureMLAssetDataset
         ):
             if ds._azureml_type == "uri_file":
@@ -208,7 +210,7 @@ class AzureMLPipelineGenerator:
     ) -> bool:
         return dataset_name.startswith(PARAMS_PREFIX) or (
             dataset_name in pipeline.inputs()
-            and dataset_name in self.catalog.filter()
+            and dataset_name in self.catalog
             and not isinstance(self.catalog[dataset_name], AzureMLAssetDataset)
         )
 
@@ -220,10 +222,15 @@ class AzureMLPipelineGenerator:
     ):
         command_kwargs = {}
         command_kwargs.update(self._get_distributed_azure_command_kwargs(node))
-        pipeline_data_passing = (
-            self.config.azure.pipeline_data_passing is not None
-            and self.config.azure.pipeline_data_passing.enabled
-        )
+
+        mlflow_env_vars = {}
+        if self.experiment_name is not None:
+            mlflow_env_vars[KEDRO_AZUREML_MLFLOW_ENABLED] = "1"
+            if self.mlflow_run_name:
+                mlflow_env_vars[KEDRO_AZUREML_MLFLOW_RUN_NAME] = self.mlflow_run_name
+            if self.experiment_name:
+                mlflow_env_vars[KEDRO_AZUREML_MLFLOW_EXPERIMENT_NAME] = self.experiment_name
+            mlflow_env_vars[KEDRO_AZUREML_MLFLOW_NODE_NAME] = node.name
 
         return command(
             name=self._sanitize_azure_name(node.name),
@@ -231,16 +238,11 @@ class AzureMLPipelineGenerator:
             command=self._prepare_command(node, pipeline),
             compute=self.get_target_resource_from_node_tags(node).cluster_name,
             environment_variables={
-                KEDRO_AZURE_RUNNER_CONFIG: KedroAzureRunnerConfig(
-                    temporary_storage=self.config.azure.temporary_storage,
-                    run_id=kedro_azure_run_id,
-                    storage_account_key=self.storage_account_key,
-                ).model_dump_json()
-                if not pipeline_data_passing
-                else "",
+                "KEDRO_ENV": self.kedro_environment,
+                **mlflow_env_vars,
                 **self.extra_env,
             },
-            environment=self._resolve_azure_environment(),  # TODO: check whether Environment exists
+            environment=self._resolve_azure_environment(),
             inputs={
                 self._sanitize_param_name(name): self._get_input(name, pipeline)
                 for name in node.inputs
@@ -249,7 +251,7 @@ class AzureMLPipelineGenerator:
                 self._sanitize_param_name(name): self._get_output(name)
                 for name in node.outputs
             },
-            code=self.config.azure.code_directory,
+            code=self.config.execution.code_directory,
             is_deterministic=("deterministic" in node.tags),
             **command_kwargs,
         )
@@ -332,7 +334,7 @@ class AzureMLPipelineGenerator:
                     azure_output = parent_outputs[sanitized_input_name]
                     azure_inputs[sanitized_input_name] = azure_output
                 # 2. try to find AzureMLAssetDataset in catalog
-                elif node_input in self.catalog.filter() and isinstance(
+                elif node_input in self.catalog and isinstance(
                     ds := self.catalog[node_input], AzureMLAssetDataset
                 ):
                     azure_inputs[sanitized_input_name] = Input(
@@ -373,12 +375,13 @@ class AzureMLPipelineGenerator:
         )
         return (
             (
-                f"cd {self.config.azure.working_directory} && "
-                if self.config.azure.working_directory is not None
-                and self.config.azure.code_directory is None
+                f"cd {self.config.execution.working_directory} && "
+                if self.config.execution.working_directory is not None
+                and self.config.execution.code_directory is None
                 else ""
             )
             + f"kedro azureml -e {self.kedro_environment} execute --pipeline={self.pipeline_name} --node={node.name} "  # noqa
             + " ".join(input_data_paths + output_data_paths)
             + (f" --params='{self.params}'" if self.params else "")
         ).strip()
+

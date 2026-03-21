@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+### Features
+
+- `kedro azureml submit -j <job>` command for submitting named jobs to Azure ML. Supports `--once` (immediate run), `--dry-run` (preview), `--wait-for-completion` (CI blocking), and `--on-job-scheduled` (callback). by [@gtauzin](https://github.com/gtauzin)
+- `kedro azureml compile -j <job>` for compiling named job pipelines to YAML. by [@gtauzin](https://github.com/gtauzin)
+- `schedules` and `jobs` config sections with cron and recurrence triggers, pipeline filtering (`from_nodes`, `to_nodes`, `tags`, etc.), per-job display name, compute, and experiment name. by [@gtauzin](https://github.com/gtauzin)
+- Named workspaces: `workspace` is now a dict of named workspace configs (with mandatory `__default__`). Jobs can reference a specific workspace via `workspace:` key. CLI `--workspace`/`-w` selects a workspace at submit time. by [@gtauzin](https://github.com/gtauzin)
+- Full kedro-mlflow compatibility: unified experiment naming via mlflow.yml, MLflow run tagging hook, and env var injection into Azure ML component jobs. by [@gtauzin](https://github.com/gtauzin)
+- Support for Python 3.13. by [@gtauzin](https://github.com/gtauzin)
+- Support factory-resolved datasets in the runner. by [@gtauzin](https://github.com/gtauzin)
+
+### Refactoring
+
+- Config restructure: the `azure:` top-level key is replaced by three flat sections — `workspace`, `compute`, `execution`. `compute` and `workspace` are flat dicts keyed by name (with mandatory `__default__`). `experiment_name` moves into per-job config. The `temporary_storage` and `pipeline_data_passing` config sections are removed. by [@gtauzin](https://github.com/gtauzin)
+- CLI overhaul: `kedro azureml run` is removed. Use `kedro azureml submit -j <job> --once` for ad-hoc runs. `kedro azureml compile` now requires `-j <job>`. `--subscription-id` replaced by `--workspace`. by [@gtauzin](https://github.com/gtauzin)
+- Removed `MlflowIntegrationConfig` — MLflow is now auto-detected from the experiment name (mlflow.yml or per-job config) without a separate toggle. by [@gtauzin](https://github.com/gtauzin)
+- Blob storage removal: `KedroAzureRunnerDataset`, `KedroAzureRunnerDistributedDataset`, `BlobStorageDataPassing`, `KedroAzureRunnerConfig`, and `runner_dataset.py` module deleted. Pipeline data passing via `AzureMLPipelineDataset` is now the only mode. by [@gtauzin](https://github.com/gtauzin)
+- Removed `kedro azureml run` command and all its options (`--display-name`, `--compute-name`, `--experiment-name`, `-p`/`--pipeline`, `--wait-for-completion`, `--on-job-scheduled`). by [@gtauzin](https://github.com/gtauzin)
+- Removed `init` arguments: `-a`/`--storage-account-name`, `-c`/`--storage-container`, `--use-pipeline-data-passing`, and positional `experiment_name`. by [@gtauzin](https://github.com/gtauzin)
+- Removed deprecated `docker` config section; environment configuration now uses `execution.environment`. by [@gtauzin](https://github.com/gtauzin)
+- Removed constants: `KEDRO_AZURE_BLOB_TEMP_DIR_NAME`, `KEDRO_AZURE_RUNNER_CONFIG`, `KEDRO_AZURE_RUNNER_DATASET_TIMEOUT`. by [@gtauzin](https://github.com/gtauzin)
+- Removed dependencies: `adlfs` and `backoff`. by [@gtauzin](https://github.com/gtauzin)
+
+### Documentation
+
+- Full Sphinx-style docstrings on all `cli_functions.py` helpers. by [@gtauzin](https://github.com/gtauzin)
+- Updated quickstart, scheduling, and data assets docs to reflect new config shape and CLI commands. by [@gtauzin](https://github.com/gtauzin)
+
 ## [1.0.0] - 2025-08-15
 
 - Compatibility changes for kedro 1.0.0 by [@em-pe](https://github.com/em-pe) issue #194

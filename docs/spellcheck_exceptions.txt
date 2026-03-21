@@ -40,7 +40,6 @@ VM
 XonshActivator
 YAML
 auth
-backoff
 behaviour
 cls
 conf

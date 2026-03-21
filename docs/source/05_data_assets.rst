@@ -15,7 +15,7 @@ other dataset in Kedro.
 
 
 Apart from these, ``kedro-azureml`` also adds the ``AzureMLPipelineDataset`` which is used to pass data between
-pipeline nodes when the pipeline is run on Azure ML and the *pipeline data passing* feature is enabled.
+pipeline nodes when the pipeline is run on Azure ML.
 By default, data is then saved and loaded using the ``PickleDataset`` as underlying dataset.
 Any other underlying dataset can be used instead by adding a ``AzureMLPipelineDataset`` to the catalog.
 

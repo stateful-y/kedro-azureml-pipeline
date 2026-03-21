@@ -9,17 +9,17 @@ from azure.ai.ml import MLClient
 from azure.ai.ml.entities import Job
 
 from kedro_azureml.auth.utils import get_azureml_credentials
-from kedro_azureml.config import AzureMLConfig
+from kedro_azureml.config import WorkspaceConfig
 
 logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def _get_azureml_client(subscription_id: Optional[str], config: AzureMLConfig):
+def _get_azureml_client(config: WorkspaceConfig):
     client_config = {
-        "subscription_id": subscription_id or config.subscription_id,
+        "subscription_id": config.subscription_id,
         "resource_group": config.resource_group,
-        "workspace_name": config.workspace_name,
+        "workspace_name": config.name,
     }
 
     credential = get_azureml_credentials()
@@ -34,31 +34,42 @@ def _get_azureml_client(subscription_id: Optional[str], config: AzureMLConfig):
 
 
 class AzureMLPipelinesClient:
-    def __init__(self, azure_pipeline: Job, subscription_id: str):
-        self.subscription_id = subscription_id
+    def __init__(self, azure_pipeline: Job):
         self.azure_pipeline = azure_pipeline
 
     def run(
         self,
-        config: AzureMLConfig,
+        config: WorkspaceConfig,
+        compute_config,
         wait_for_completion=False,
         on_job_scheduled: Optional[Callable[[Job], None]] = None,
+        display_name: Optional[str] = None,
+        compute_name: Optional[str] = None,
+        experiment_name: Optional[str] = None,
     ) -> bool:
-        with _get_azureml_client(self.subscription_id, config) as ml_client:
+        if not experiment_name:
+            logger.warning(
+                "No experiment_name provided. Set it in mlflow.yml "
+                "(tracking.experiment.name) or pass --experiment-name on the CLI. "
+                "Azure ML will use a default experiment name."
+            )
+        with _get_azureml_client(config) as ml_client:
+            effective_cluster_name = compute_name or compute_config.root["__default__"].cluster_name
             assert (
-                cluster := ml_client.compute.get(
-                    config.compute["__default__"].cluster_name
-                )
-            ), f"Cluster {config.compute['__default__'].cluster_name} does not exist"
+                cluster := ml_client.compute.get(effective_cluster_name)
+            ), f"Cluster {effective_cluster_name} does not exist"
 
             logger.info(
                 f"Creating job on cluster {cluster.name} ({cluster.size}, min instances: {cluster.min_instances}, "
                 f"max instances: {cluster.max_instances})"
             )
 
+            if display_name:
+                self.azure_pipeline.display_name = display_name
+
             pipeline_job = ml_client.jobs.create_or_update(
                 self.azure_pipeline,
-                experiment_name=config.experiment_name,
+                experiment_name=experiment_name,
                 compute=cluster,
             )
 

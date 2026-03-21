@@ -12,9 +12,11 @@ from kedro_azureml.runner import AzurePipelinesRunner
 
 
 def test_can_invoke_dummy_pipeline(
-    dummy_pipeline: Pipeline, patched_azure_runner: AzurePipelinesRunner
+    dummy_pipeline: Pipeline, tmp_path: Path
 ):
-    runner = patched_azure_runner
+    runner = AzurePipelinesRunner(
+        data_paths={"input_data": tmp_path, "i2": tmp_path, "i3": tmp_path, "output_data": tmp_path}
+    )
     catalog = DataCatalog()
     input_data = ["yolo :)"]
     catalog["input_data"] = MemoryDataset(data=input_data)
@@ -28,10 +30,12 @@ def test_can_invoke_dummy_pipeline(
 
 @pytest.mark.skip(reason="The failure should be investigated. ")
 def test_runner_fills_missing_datasets(
-    dummy_pipeline: Pipeline, patched_azure_runner: AzurePipelinesRunner
+    dummy_pipeline: Pipeline, tmp_path: Path
 ):
     input_data = "yolo :)"
-    runner = patched_azure_runner
+    runner = AzurePipelinesRunner(
+        data_paths={"input_data": tmp_path, "i2": tmp_path, "i3": tmp_path, "output_data": tmp_path}
+    )
     catalog = DataCatalog()
     catalog.add("input_data", MemoryDataset(data=input_data))
     for node_no in range(3):
@@ -56,7 +60,7 @@ def test_runner_pipeline_data_passing(dummy_pipeline: Pipeline, tmp_path: Path):
     )
 
     runner = AzurePipelinesRunner(
-        pipeline_data_passing=True, data_paths={"input_data": tmp_path, "i2": tmp_path}
+        data_paths={"input_data": tmp_path, "i2": tmp_path}
     )
     catalog = DataCatalog()
     runner.run(
@@ -97,7 +101,7 @@ def test_asset_dataset_root_dir_adjustments(
     input_dataset._save(input_data)
 
     runner = AzurePipelinesRunner(
-        pipeline_data_passing=True, data_paths={"input_data": data_path, "i2": tmp_path}
+        data_paths={"input_data": data_path, "i2": tmp_path}
     )
 
     catalog = DataCatalog({"input_data": input_dataset})
@@ -107,3 +111,29 @@ def test_asset_dataset_root_dir_adjustments(
         catalog,
     )
     assert catalog["input_data"].root_dir == "/random/folder"
+
+
+def test_runner_uses_factory_resolved_datasets(
+    dummy_pipeline: Pipeline, tmp_path: Path
+):
+    """Pipeline inputs resolvable from the original catalog (e.g. via a factory
+    pattern) must be taken from there rather than replaced with a stub dataset.
+
+    When `input_data` is already in the catalog but NOT in data_paths,
+    the runner should pick it up from the catalog as an unsatisfied input
+    rather than trying to create a default dataset.
+    """
+    input_data = ["hello from factory"]
+    catalog = DataCatalog()
+    catalog["input_data"] = MemoryDataset(data=input_data)
+
+    # Only provide data_paths for intermediate datasets, NOT for input_data
+    runner = AzurePipelinesRunner(
+        data_paths={"i2": tmp_path, "i3": tmp_path, "output_data": tmp_path}
+    )
+
+    results = runner.run(dummy_pipeline, catalog)
+
+    assert results["output_data"].load() == input_data, (
+        "Factory-resolved input dataset should propagate through the pipeline"
+    )

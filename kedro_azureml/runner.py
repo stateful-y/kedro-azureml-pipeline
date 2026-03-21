@@ -1,5 +1,4 @@
 import logging
-import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -9,15 +8,8 @@ from kedro.runner import SequentialRunner
 from kedro_datasets.pickle import PickleDataset
 from pluggy import PluginManager
 
-from kedro_azureml.config import KedroAzureRunnerConfig
-from kedro_azureml.constants import KEDRO_AZURE_RUNNER_CONFIG
-from kedro_azureml.datasets import (
-    AzureMLPipelineDataset,
-    KedroAzureRunnerDataset,
-    KedroAzureRunnerDistributedDataset,
-)
+from kedro_azureml.datasets import AzureMLPipelineDataset
 from kedro_azureml.datasets.asset_dataset import AzureMLAssetDataset
-from kedro_azureml.distributed.utils import is_distributed_environment
 
 logger = logging.getLogger(__name__)
 
@@ -27,16 +19,8 @@ class AzurePipelinesRunner(SequentialRunner):
         self,
         is_async: bool = False,
         data_paths: Optional[Dict[str, str]] = None,
-        pipeline_data_passing: bool = False,
     ):
         super().__init__(is_async)
-        self.pipeline_data_passing = pipeline_data_passing
-        self.runner_config_raw = os.environ.get(KEDRO_AZURE_RUNNER_CONFIG)
-        self.runner_config: KedroAzureRunnerConfig = (
-            KedroAzureRunnerConfig.model_validate_json(self.runner_config_raw)
-            if not self.pipeline_data_passing
-            else None
-        )
         self.data_paths = data_paths if data_paths is not None else {}
 
     def run(
@@ -91,7 +75,11 @@ class AzurePipelinesRunner(SequentialRunner):
         # Loop over remaining input datasets to add them to the catalog
         unsatisfied = pipeline.inputs() - set(updated_catalog.filter())
         for ds_name in unsatisfied:
-            updated_catalog[ds_name] = self.create_default_data_set(ds_name)
+            if ds_name in catalog:
+                # Dataset is resolvable including as a factory dataset
+                updated_catalog[ds_name] = catalog[ds_name]
+            else:
+                updated_catalog[ds_name] = self.create_default_data_set(ds_name)
 
         return super().run(
             pipeline=pipeline,
@@ -102,27 +90,11 @@ class AzurePipelinesRunner(SequentialRunner):
         )
 
     def create_default_data_set(self, ds_name: str) -> AbstractDataset:
-        if self.pipeline_data_passing:
-            return AzureMLPipelineDataset(
-                {
-                    "type": PickleDataset,
-                    "backend": "cloudpickle",
-                    "filepath": f"{ds_name}.pickle",
-                },
-                root_dir=self.data_paths[ds_name],
-            )
-        else:
-            # TODO: handle credentials better (probably with built-in Kedro credentials
-            #  via ConfigLoader (but it's not available here...)
-            dataset_cls = KedroAzureRunnerDataset
-            if is_distributed_environment():
-                logger.info("Using distributed dataset class as a default")
-                dataset_cls = KedroAzureRunnerDistributedDataset
-
-            return dataset_cls(
-                self.runner_config.temporary_storage.account_name,
-                self.runner_config.temporary_storage.container,
-                self.runner_config.storage_account_key,
-                ds_name,
-                self.runner_config.run_id,
-            )
+        return AzureMLPipelineDataset(
+            {
+                "type": PickleDataset,
+                "backend": "cloudpickle",
+                "filepath": f"{ds_name}.pickle",
+            },
+            root_dir=self.data_paths[ds_name],
+        )

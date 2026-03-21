@@ -48,7 +48,7 @@ Options:
   -h, --help      Show this message and exit.
 
 Commands:
-  compile  Compiles the pipeline into YAML format
+  compile  Compile job pipeline(s) into YAML format
   init     Creates basic configuration for Kedro AzureML plugin
-  run      Runs the specified pipeline in Azure ML Pipelines
+  submit   Submit named jobs to Azure ML
 ```

@@ -20,7 +20,7 @@ from kedro.io.core import (
 )
 
 from kedro_azureml.client import _get_azureml_client
-from kedro_azureml.config import AzureMLConfig
+from kedro_azureml.config import WorkspaceConfig
 from kedro_azureml.datasets.pipeline_dataset import AzureMLPipelineDataset
 
 AzureMLDataAssetType = Literal["uri_file", "uri_folder"]
@@ -136,12 +136,12 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
             )
 
     @property
-    def azure_config(self) -> AzureMLConfig:
+    def azure_config(self) -> WorkspaceConfig:
         """AzureML config to be used by the dataset."""
         return self._azureml_config
 
     @azure_config.setter
-    def azure_config(self, azure_config: AzureMLConfig) -> None:
+    def azure_config(self, azure_config: WorkspaceConfig) -> None:
         self._azureml_config = azure_config
 
     @property
@@ -176,7 +176,7 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
     def _get_latest_version(self) -> str:
         try:
             with _get_azureml_client(
-                subscription_id=None, config=self._azureml_config
+                config=self._azureml_config
             ) as ml_client:
                 return ml_client.data.get(self._azureml_dataset, label="latest").version
         except ResourceNotFoundError:
@@ -197,7 +197,7 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
 
     def _get_azureml_dataset(self):
         with _get_azureml_client(
-            subscription_id=None, config=self._azureml_config
+            config=self._azureml_config
         ) as ml_client:
             return ml_client.data.get(
                 self._azureml_dataset, version=self._resolve_azureml_version()
@@ -215,7 +215,7 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
             # Use Azure ML v2 SDK native download functionality
             # This avoids the ARM64 compatibility issues with azureml-fsspec
             with _get_azureml_client(
-                subscription_id=None, config=self._azureml_config
+                config=self._azureml_config
             ) as ml_client:
                 logger.info(
                     f"Downloading dataset {self._azureml_dataset} version "

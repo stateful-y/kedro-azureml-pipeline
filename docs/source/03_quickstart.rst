@@ -25,16 +25,20 @@ created in Azure and have their **names** ready to input to the plugin:
 -  Azure ML workspace
 -  Azure ML Compute Cluster
 
-Depending on the type of flow you want to use, you might also need:
--  Azure Storage Account and Storage Container
--  Azure Storage Key (will be used to execute the pipeline)
--  Azure Container Registry
+Both flows use **Azure ML Environments** to define the execution image. The difference is whether your application code is baked into the image or uploaded at runtime:
+
+1. **Code upload flow** — build a base image with dependencies only, register it as an Azure ML Environment, and set ``code_directory: "."`` so code is uploaded on every run. Best for fast iteration.
+2. **Docker image flow** — build an image containing both dependencies and application code, register it as an Azure ML Environment, and set ``code_directory: ~``. Best for CI/CD and production repeatability.
+
+Both flows require you to build a Docker image and push it to a registry.
+If you use **Azure Container Registry (ACR)** for this, make sure it is
+created and accessible from your Azure ML workspace before you begin.
 
 Project initialization
 ----------------------
 
 1. Make sure that you're logged into Azure (``az login``).
-2. Prepare new virtual environment with Python >=3.8. Install the
+2. Prepare new virtual environment with Python >=3.9. Install the
    packages
 
    .. code:: console
@@ -67,56 +71,37 @@ Project initialization
 7. Initialize Kedro Azure ML plugin, it requires the Azure resource names as stated above. Experiment name can be anything you like (as
    long as it's allowed by Azure ML).
 
-   There are two options, which determine how you should initialize the plugin (don't worry, you can change it later 👍 ):
-    1. Use docker image flow (shown in the Quickstart video) - more suitable for MLOps processes with better experiment repeatability guarantees
-    2. Use code upload flow - more suitable for Data Scientists' fast experimentation and pipeline development
-
 .. code:: console
 
     Usage: kedro azureml init [OPTIONS] SUBSCRIPTION_ID RESOURCE_GROUP
-                              WORKSPACE_NAME EXPERIMENT_NAME CLUSTER_NAME
+                              WORKSPACE_NAME CLUSTER_NAME
 
       Creates basic configuration for Kedro AzureML plugin
 
     Options:
       --azureml-environment, --aml-env TEXT
-                                      Azure ML environment to use with code flow
-      -d, --docker-image TEXT         Docker image to use
-      -a, --storage-account-name TEXT
-                                      Name of the storage account (if you want to
-                                      use Azure Blob Storage for temporary data)
-      -c, --storage-container TEXT    Name of the storage container (if you want
-                                      to use Azure Blob Storage for temporary
-                                      data)
-      --use-pipeline-data-passing     (flag) Set, to use EXPERIMENTAL pipeline
-                                      data passing
+                                      Azure ML environment to use (required)
 
-For **docker image flow** (1.), use the following ``init`` command:
+Example ``init`` command:
 
     .. code:: console
 
-       kedro azureml init <AZURE_SUBSCRIPTION_ID> <AZURE_RESOURCE_GROUP> <AML_WORKSPACE_NAME> <EXPERIMENT_NAME> <COMPUTE_NAME> \
-        --docker-image <YOUR_ARC>.azurecr.io/<IMAGE_NAME>:latest -a <STORAGE_ACCOUNT_NAME> -c <STORAGE_CONTAINER_NAME>
-
-
-For **code upload flow** (2.), use the following ``init`` command:
-
-    .. code:: console
-
-       kedro azureml init <AZURE_SUBSCRIPTION_ID> <AZURE_RESOURCE_GROUP> <AML_WORKSPACE_NAME> <EXPERIMENT_NAME> <COMPUTE_NAME> \
-        --aml-env <YOUR_ARC>.azurecr.io/<IMAGE_NAME>:latest -a <STORAGE_ACCOUNT_NAME> -c <STORAGE_CONTAINER_NAME>
+       kedro azureml init <AZURE_SUBSCRIPTION_ID> <AZURE_RESOURCE_GROUP> <AML_WORKSPACE_NAME> <COMPUTE_NAME> \
+        --aml-env <YOUR_ARC>.azurecr.io/<IMAGE_NAME>:latest
 
 .. note::
-    If you want to pass data between nodes using the built-in Azure ML pipeline data passing, specify
-    option ``--use-pipeline-data-passing`` instead of `-a` and `-c` options.
+    Data between pipeline nodes is passed using Azure ML's built-in pipeline data passing.
+    No storage account key is needed as AML handles inter-step data via the workspace's default datastore.
 
-    Note that pipeline data passing feature is experimental 🧑‍🔬 See :doc:`05_data_assets` for more information about this.
+    If you need to route specific datasets through a different datastore (e.g. for
+    compliance or performance), declare them explicitly in the catalog using
+    ``AzureMLAssetDataset``. See :doc:`05_data_assets` for more information.
 
 Adjusting the Data Catalog
 --------------------------
 
 8. Adjust the Data Catalog - the default one stores all data locally,
-   whereas the plugin will automatically use Azure Blob Storage / Azure ML built-in storage (if *pipeline data passing* was enabled). Only
+   whereas the plugin will automatically use Azure ML built-in storage for intermediate data. Only
    input data is required to be read locally.
 
    Final ``conf/base/catalog.yml`` should look like this:
@@ -138,8 +123,8 @@ Adjusting the Data Catalog
         filepath: data/01_raw/shuttles.xlsx
         layer: raw
 
-Pick your deployment option
----------------------------
+Build the environment
+---------------------
 For the project's code to run on Azure ML it needs to have an environment
 with the necessary dependencies.
 
@@ -152,52 +137,14 @@ with the necessary dependencies.
 
    This command creates a several files, including ``Dockerfile`` and ``.dockerignore``. These can be adjusted to match the workflow for your project.
 
-
-Depending on whether you want to use code upload when submitting an
-experiment or not, you would need to add the code and any possible input
-data to the Docker image.
-
-(Option 1) Docker image flow
-****************************
-This option is also shown in the video-tutorial above.
-
-.. note::
-    | Note that using docker image flow means that every time you change your pipeline's code,
-    | you will need to build and push the docker image to ACR again.
-    | We recommend this option for CI/CD-automated MLOps workflows.
-
-10. Ensure that in the ``azureml.yml`` you have ``azure.code_directory`` set to null, and ``docker.image`` is filled:
-
-    .. code:: yaml
-
-       azure:
-         code_directory: ~
-       # rest of the azureml.yml file
-       docker:
-          image: your-container-registry.azurecr.io/kedro-azureml:latest
-
-11. Adjust the ``.dockerignore`` file to include any other files to be added to the Docker image, such as ``!data/01_raw`` for the raw data files.
-
-12. Invoke docker build:
-
-    .. code:: console
-
-       kedro docker build --docker-args "--build-arg=BASE_IMAGE=python:3.9" --image=<image tag from conf/base/azureml.yml>
-
-13. Once finished, login to ACR:
-
-    .. code:: console
-
-        az acr login --name <acr repo name>
-
-    \and push the image:
-
-    .. code:: console
-
-       docker push <image tag from conf/base/azureml.yml>
-
-(Option 2) Code upload flow
+Pick your deployment option
 ***************************
+
+(Option 1) Code upload flow
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+With code upload, only dependencies live in the Docker image. Your project code
+is uploaded to Azure ML on every ``kedro azureml submit`` invocation.
 
 10. Everything apart from the section *install project requirements*
 can be removed from the ``Dockerfile``.
@@ -209,15 +156,14 @@ can be removed from the ``Dockerfile``.
 
         .. code-block:: dockerfile
 
-            ARG BASE_IMAGE=python:3.9
+            ARG BASE_IMAGE=python:3.12
             FROM $BASE_IMAGE
 
             # install project requirements
             COPY src/requirements.txt /tmp/requirements.txt
             RUN pip install -r /tmp/requirements.txt && rm -f /tmp/requirements.txt
 
-11. Ensure ``azure.code_directory: "."`` is set in the ``azureml.yml`` config file (it's set if you've used ``--aml_env`` during ``init`` above).
-
+11. Ensure ``execution.code_directory: "."`` is set in the ``azureml.yml`` config file (it's set by default if you used ``init``).
 
 
 
@@ -225,7 +171,7 @@ can be removed from the ``Dockerfile``.
 
     .. code:: console
 
-        kedro docker build --docker-args "--build-arg=BASE_IMAGE=python:3.9" --image=<acr repo name>.azurecr.io/kedro-base-image:latest
+        kedro docker build --docker-args "--build-arg=BASE_IMAGE=python:3.12" --image=<acr repo name>.azurecr.io/kedro-base-image:latest
 
 12. Login to ACR and push the image:
 
@@ -251,34 +197,64 @@ Now you can re-use this environment and run the pipeline without the need to bui
     |
     | The plugin will do it's best to handle some of the edge-cases, but the fact that some of your files might not be captured by Azure ML SDK is out of our reach.
 
+(Option 2) Docker image flow
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+With docker image flow, both dependencies **and** your application code are baked
+into the Docker image. You must rebuild and push the image whenever your code
+changes.
+
+.. note::
+    | We recommend this option for CI/CD-automated MLOps workflows where
+    | experiment repeatability is critical.
+
+10. Keep the full ``Dockerfile`` (including the ``COPY`` and project install steps). Adjust the ``.dockerignore`` to include any files needed in the image, such as ``!data/01_raw`` for raw data.
+
+11. Ensure ``execution.code_directory: ~`` (null) is set in ``azureml.yml`` so that code is **not** uploaded at runtime.
+
+12. Build the image with your application code:
+
+    .. code:: console
+
+        kedro docker build --docker-args "--build-arg=BASE_IMAGE=python:3.12" --image=<acr repo name>.azurecr.io/kedro-app:latest
+
+13. Login to ACR and push the image:
+
+    .. code:: console
+
+        az acr login --name <acr repo name>
+        docker push <acr repo name>.azurecr.io/kedro-app:latest
+
+14. Register the Azure ML Environment:
+
+    .. code:: console
+
+        az ml environment create --name <environment-name> --image <acr repo name>.azurecr.io/kedro-app:latest
+
+15. Set ``execution.environment`` in ``azureml.yml`` to the registered environment name.
+
 
 Run the pipeline
 ----------------
 
-14. Run the pipeline on Azure ML Pipelines. Here, the *Azure Subscription ID* and *Storage Account Key* will be used:
+14. Define a job in your ``azureml.yml`` configuration:
+
+    .. code:: yaml
+
+       jobs:
+         default_run:
+           pipeline:
+             pipeline_name: "__default__"
+
+15. Submit the job to Azure ML Pipelines:
 
     .. code:: console
 
-       kedro azureml run
+       kedro azureml submit -j default_run
 
-    If you're using Azure Blob Storage for temporary data (``-a``, ``-c`` options during init), you will most likely see the following prompt:
-
-    .. code:: console
-
-       Environment variable AZURE_STORAGE_ACCOUNT_KEY not set, falling back to CLI prompt
-       Please provide Azure Storage Account Key for storage account <azure-storage-account>:
-
-    Input the storage account key and press [ENTER] (input will be hidden).
-
-    If you're using *pipeline data passing* (``--use-pipeline-data-passing`` option during init), you're already set.
-
-11. Plugin will verify the configuration (e.g. the existence of the
+16. Plugin will verify the configuration (e.g. the existence of the
     compute cluster) and then it will create a *Job* in the Azure ML.
     The URL to view the job will be displayed in the console output.
-
-12. (optional) You can also use |br| ``kedro azureml run -s <azure-subscription-id> --wait-for-completion`` |br|
-    to actively wait for the job to finish. Execution logs will be
-    streamed to the console.
 
     .. code:: console
 
@@ -368,7 +344,7 @@ will be run on ``cpu-cluster-8`` while all other nodes are run on the default ``
 Marking a node as deterministic
 ------------------
 
-By default the plugin will mark all nodes of the Azure ML pipeline as non-deterministic, which 
+By default the plugin will mark all nodes of the Azure ML pipeline as non-deterministic, which
 means that Azure ML will not reuse the results of the node if it has been run before.
 
 To mark a node as deterministic, you can simply add the ``deterministic`` tag to the node.
@@ -413,7 +389,7 @@ The ``params:`` you use support namespacing as well as overriding at runtime, e.
 
 .. code:: console
 
-    kedro azureml run -s <subscription id> --params '{"data_science": {"active_modelling_pipeline": {"num_nodes": 4}}}'
+    kedro azureml submit -j my_training_job --params '{"data_science": {"active_modelling_pipeline": {"num_nodes": 4}}}'
 
 The ``distributed_job`` decorator also supports "hard-coded" values for number of nodes:
 
@@ -428,31 +404,40 @@ The ``distributed_job`` decorator also supports "hard-coded" values for number o
 
 We have tested the implementation heavily with PyTorch (+PyTorch Lightning) and GPUs. If you encounter any problems, drop us an issue on GitHub!
 
-Run customization
------------------
+Submit customization
+--------------------
 
-In case you need to customize pipeline run context, modifying configuration files is not always the most convinient option. Therefore, ``kedro azureml run`` command provides a few additional options you may find useful:
+Pipeline runs are configured as **jobs** in ``azureml.yml`` (see :doc:`06_scheduling`).
+The ``kedro azureml submit`` command accepts a few additional options to override
+settings at submit time:
 
-- ``--subscription_id`` overrides Azure Subscription ID,
-- ``--azureml_environment`` overrides the configured Azure ML Environment,
-- ``--image`` modifies the Docker image used during the execution,
-- ``--pipeline`` allows to select a pipeline to run (by default, the ``__default__`` pipeline is started),
+- ``-w, --workspace`` selects a named workspace from the ``workspace`` section of ``azureml.yml``,
+- ``--aml-env`` overrides the configured Azure ML Environment,
 - ``--params`` takes a JSON string with parameters override (JSONed version of ``conf/*/parameters.yml``, not the Kedro's ``params:`` syntax),
-- ``--env-var KEY=VALUE`` sets the OS environment variable injected to the steps during runtime (can be used multiple times).
-- ``--load-versions`` specifies a particular dataset version (timestamp) for loading (similar behavior as Kedro)
-- ``--on-job-scheduled  path.to.module:my_function`` specifies a callback function to be called on the azureml pipeline job start (example below)
+- ``--env-var KEY=VALUE`` sets the OS environment variable injected to the steps during runtime (can be used multiple times),
+- ``--load-versions`` specifies a particular dataset version (timestamp) for loading (similar behavior as Kedro),
+- ``--dry-run`` previews what would be submitted without calling Azure ML,
+- ``--once`` forces an immediate run even when the job has a schedule configured,
+- ``--wait-for-completion`` blocks until the pipeline run finishes (useful in CI),
+- ``--on-job-scheduled path.to.module:my_function`` specifies a callback invoked after each job is scheduled.
+
+Jobs define the pipeline name, optional schedule, display name, compute cluster,
+and experiment name in config. See :doc:`06_scheduling` for full details.
+
+The ``--on-job-scheduled`` callback receives the Azure ML ``Job`` object as its
+only argument:
 
 .. code:: python
 
-    # src/mymodule/myfile.py
-    def save_output_callback(job):
-        """saves the pipeline job name to a file"""
-        with open("myfile.txt", "w") as f:
-            f.write(job.name)
+    # src/mymodule/callbacks.py
+    def save_job_url(job):
+        """Save the studio URL when the job is scheduled."""
+        with open("job_url.txt", "w") as f:
+            f.write(job.studio_url)
 
 .. code:: console
 
-    kedro azureml run --on-job-scheduled mymodule.myfile:save_output_callback
+    kedro azureml submit -j my_job --once --on-job-scheduled mymodule.callbacks:save_job_url
 
 
 .. |br| raw:: html

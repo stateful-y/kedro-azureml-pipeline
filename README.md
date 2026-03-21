@@ -18,11 +18,11 @@
 ## About
 Following plugin enables running Kedro pipelines on Azure ML Pipelines service.
 
-We support 2 native Azure Machine Learning types of workflows:
-* For Data Scientists: fast, iterative development with code upload 
-* For MLOps: stable, repeatable workflows with Docker 
+We support 2 workflows for running Kedro pipelines on Azure ML Pipelines, both backed by Azure ML Environments:
+* For Data Scientists: fast, iterative development with **code upload** (only dependencies in the image, code uploaded at runtime)
+* For MLOps: stable, repeatable workflows with **Docker image** (code baked into the image)
 
-## Documentation 
+## Documentation
 
 For detailed documentation refer to https://kedro-azureml.readthedocs.io/
 
@@ -36,9 +36,9 @@ Options:
   -h, --help      Show this message and exit.
 
 Commands:
-  compile  Compiles the pipeline into YAML format
+  compile  Compile job pipeline(s) into YAML format
   init     Creates basic configuration for Kedro AzureML plugin
-  run      Runs the specified pipeline in Azure ML Pipelines
+  submit   Submit named jobs to Azure ML
 ```
 
 ## Quickstart
@@ -47,4 +47,3 @@ Follow **quickstart** section on [kedro-azureml.readthedocs.io](https://kedro-az
 <a href="https://bit.ly/kedroazureml">
     <img src="./docs/images/tutorial-video-yt.jpg" alt="Kedro Azure ML video tutorial" title="Kedro Azure ML video tutorial" />
 </a>
-

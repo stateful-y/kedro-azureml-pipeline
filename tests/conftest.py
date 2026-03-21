@@ -1,8 +1,6 @@
 import os
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
-from uuid import uuid4
 
 import pandas as pd
 import pytest
@@ -13,12 +11,9 @@ from kedro_datasets.pandas import CSVDataset, ParquetDataset
 
 from kedro_azureml.config import (
     _CONFIG_TEMPLATE,
-    AzureTempStorageConfig,
     KedroAzureMLConfig,
-    KedroAzureRunnerConfig,
 )
-from kedro_azureml.constants import KEDRO_AZURE_RUNNER_CONFIG
-from kedro_azureml.datasets import AzureMLAssetDataset, KedroAzureRunnerDataset
+from kedro_azureml.datasets import AzureMLAssetDataset
 from kedro_azureml.runner import AzurePipelinesRunner
 from kedro_azureml.utils import CliContext
 from tests.utils import identity
@@ -77,10 +72,7 @@ def dummy_plugin_config() -> KedroAzureMLConfig:
 @pytest.fixture()
 def patched_kedro_package():
     with patch("kedro.framework.project.PACKAGE_NAME", "tests") as patched_package:
-        # original_dir = os.getcwd()
-        # os.chdir("tests")
         yield patched_package
-        # os.chdir(original_dir)
 
 
 @pytest.fixture()
@@ -90,48 +82,13 @@ def cli_context() -> CliContext:
     return CliContext("base", metadata)
 
 
-@pytest.fixture()
-def patched_azure_dataset():
-    with TemporaryDirectory() as tmp_dir:
-        target_path = Path(tmp_dir) / (uuid4().hex + ".bin")
-    with patch.object(
-        KedroAzureRunnerDataset,
-        "_get_target_path",
-        return_value=str(target_path.absolute()),
-    ):
-        yield KedroAzureRunnerDataset("", "", "", "unit_tests", uuid4().hex)
-
-
-@pytest.fixture()
-def patched_azure_runner(patched_azure_dataset):
-    backup = os.environ.copy()
-    try:
-        cfg = KedroAzureRunnerConfig(
-            temporary_storage=AzureTempStorageConfig(
-                account_name="unit_test", container="container"
-            ),
-            run_id=uuid4().hex,
-            storage_account_key="",
-        )
-        os.environ[KEDRO_AZURE_RUNNER_CONFIG] = cfg.model_dump_json()
-        yield AzurePipelinesRunner()
-    except Exception:
-        pass
-    os.environ = backup
-
-
-@pytest.fixture()
-def patched_azure_pipeline_data_passing_runner():
-    yield AzurePipelinesRunner(pipeline_data_passing=True)
-
 
 class ExtendedMagicMock(MagicMock):
     def to_dict(self):
         return {
             "subscription_id": self.subscription_id,
             "resource_group": self.resource_group,
-            "workspace_name": self.workspace_name,
-            "experiment_name": self.experiment_name,
+            "name": self.name,
         }
 
 
@@ -140,8 +97,7 @@ def mock_azureml_config():
     mock_config = ExtendedMagicMock()
     mock_config.subscription_id = "123"
     mock_config.resource_group = "456"
-    mock_config.workspace_name = "best"
-    mock_config.experiment_name = "test"
+    mock_config.name = "best"
     return mock_config
 
 
@@ -301,3 +257,27 @@ def multi_catalog():
         version=Version(None, None),
     )
     return DataCatalog({"input_data": csv, "i2": parq})
+
+
+@pytest.fixture
+def factory_catalog():
+    """Catalog with a dataset factory pattern and an explicit AzureMLAssetDataset.
+
+    ``input_data`` resolves via the ``{name}`` factory pattern to a MemoryDataset
+    so it is NOT in ``catalog.filter()``.  ``i2`` is an explicit AzureMLAssetDataset.
+    """
+    from kedro.io.catalog_config_resolver import CatalogConfigResolver
+
+    parq = AzureMLAssetDataset(
+        dataset={
+            "type": ParquetDataset,
+            "filepath": "xyz.parq",
+        },
+        azureml_dataset="test_dataset_2",
+        version=Version(None, None),
+    )
+    resolver = CatalogConfigResolver(
+        config={"{name}": {"type": "kedro.io.MemoryDataset"}}
+    )
+    catalog = DataCatalog(datasets={"i2": parq}, config_resolver=resolver)
+    return catalog

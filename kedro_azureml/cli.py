@@ -10,21 +10,15 @@ from kedro.framework.cli.utils import _split_load_versions
 from kedro.framework.startup import ProjectMetadata
 
 from kedro_azureml.cli_functions import (
-    default_job_callback,
+    compile_job_pipelines,
     dynamic_import_job_schedule_func_from_str,
-    get_context_and_pipeline,
     parse_extra_env_params,
     parse_runtime_params,
+    submit_scheduled_jobs,
     verify_configuration_directory_for_azure,
     warn_about_ignore_files,
 )
-from kedro_azureml.client import AzureMLPipelinesClient
 from kedro_azureml.config import CONFIG_TEMPLATE_YAML
-from kedro_azureml.constants import (
-    AZURE_SUBSCRIPTION_ID,
-    KEDRO_AZURE_BLOB_TEMP_DIR_NAME,
-)
-from kedro_azureml.distributed.utils import is_distributed_master_node
 from kedro_azureml.manager import KedroContextManager
 from kedro_azureml.runner import AzurePipelinesRunner
 from kedro_azureml.utils import CliContext
@@ -59,7 +53,6 @@ def azureml_group(ctx, metadata: ProjectMetadata, env):
 @click.argument("subscription_id")
 @click.argument("resource_group")
 @click.argument("workspace_name")
-@click.argument("experiment_name")
 @click.argument("cluster_name")
 @click.option(
     "--azureml-environment",
@@ -68,92 +61,39 @@ def azureml_group(ctx, metadata: ProjectMetadata, env):
     type=str,
     help="Azure ML environment to use with code flow",
 )
-@click.option(
-    "-d", "--docker-image", default=None, type=str, help="Docker image to use"
-)
-@click.option(
-    "-a",
-    "--storage-account-name",
-    help="Name of the storage account (if you want to use Azure Blob Storage for temporary data)",
-)
-@click.option(
-    "-c",
-    "--storage-container",
-    help="Name of the storage container (if you want to use Azure Blob Storage for temporary data)",
-)
-@click.option(
-    "--use-pipeline-data-passing",
-    is_flag=True,
-    default=False,
-    help="(flag) Set, to use EXPERIMENTAL pipeline data passing",
-)
 @click.pass_obj
 def init(
     ctx: CliContext,
     subscription_id,
     resource_group,
     workspace_name,
-    experiment_name,
     cluster_name,
     azureml_environment: Optional[str],
-    docker_image: Optional[str],
-    storage_account_name,
-    storage_container,
-    use_pipeline_data_passing: bool,
 ):
     """
     Creates basic configuration for Kedro AzureML plugin
     """
 
-    # Check whether docker_image and azure_ml_environment are specified, they cannot be, they are mutually exclusive
-    if docker_image and azureml_environment:
+    if not azureml_environment:
         raise click.UsageError(
-            "You cannot specify both --docker_image/-d and --azure_ml_environment/--aml_env"
-        )
-    elif not (docker_image or azureml_environment):
-        raise click.UsageError(
-            "You must specify either --docker_image/-d or --azure_ml_environment/--aml_env"
-        )
-
-    if (
-        not (storage_account_name and storage_container)
-        and not use_pipeline_data_passing
-    ):
-        raise click.UsageError(
-            "You need to specify storage account (-a) and container name (-c) "
-            "or enable pipeline data passing (--use_pipeline_data_passing)"
+            "You must specify --azure_ml_environment/--aml_env"
         )
 
     target_path = Path.cwd().joinpath("conf/base/azureml.yml")
+
     cfg = CONFIG_TEMPLATE_YAML.format(
         **{
             "subscription_id": subscription_id,
             "resource_group": resource_group,
             "workspace_name": workspace_name,
-            "experiment_name": experiment_name,
             "cluster_name": cluster_name,
-            "storage_account_name": storage_account_name or "~",
-            "storage_container": storage_container or "~",
             "environment_name": azureml_environment or "~",
-            "pipeline_data_passing": use_pipeline_data_passing,
-            "docker_image": docker_image or "~",
-            "code_directory": "." if azureml_environment else "~",
+            "code_directory": ".",
         }
     )
     target_path.write_text(cfg)
 
     click.echo(f"Configuration generated in {target_path}")
-
-    if storage_account_name and storage_container:
-        click.echo(
-            click.style(
-                f"It's recommended to set Lifecycle management rule for storage container {storage_container} "
-                f"to avoid costs of long-term storage of the temporary data."
-                f"\nTemporary data will be stored under abfs://{storage_container}/{KEDRO_AZURE_BLOB_TEMP_DIR_NAME} path"  # noqa
-                f"\nSee https://docs.microsoft.com/en-us/azure/storage/blobs/lifecycle-management-policy-configure?tabs=azure-portal",  # noqa
-                fg="green",
-            )
-        )
 
     aml_ignore = Path.cwd().joinpath(".amlignore")
     if aml_ignore.exists():
@@ -170,13 +110,6 @@ def init(
 
 @azureml_group.command()
 @click.option(
-    "-s",
-    "--subscription-id",
-    help=f"Azure Subscription ID. Defaults to env `{AZURE_SUBSCRIPTION_ID}`",
-    default=lambda: os.getenv(AZURE_SUBSCRIPTION_ID, ""),
-    type=str,
-)
-@click.option(
     "--azureml-environment",
     "--aml-env",
     "aml_env",
@@ -184,141 +117,13 @@ def init(
     help="Azure ML Environment to use for pipeline execution.",
 )
 @click.option(
-    "-i",
-    "--image",
-    type=str,
-    help="Docker image to use for pipeline execution.",
-)
-@click.option(
-    "-p",
-    "--pipeline",
-    "pipeline",
-    type=str,
-    help="Name of pipeline to run",
-    default="__default__",
-)
-@click.option(
-    "--params",
-    "params",
-    type=str,
-    help="Parameters override in form of JSON string",
-)
-@click.option("--wait-for-completion", type=bool, is_flag=True, default=False)
-@click.option(
-    "--env-var",
+    "-j",
+    "--job",
+    "job_names",
     type=str,
     multiple=True,
-    help="Environment variables to be injected in the steps, format: KEY=VALUE",
-)
-@click.option(
-    "--load-versions",
-    "-lv",
-    type=str,
-    default="",
-    help=LOAD_VERSION_HELP,
-    callback=_split_load_versions,
-)
-@click.option(
-    "--on-job-scheduled",
-    "on_job_scheduled",
-    callback=dynamic_import_job_schedule_func_from_str,
-    help="""Specify a function to execute when the azureml pipeline job
-    is scheduled. The function should be in the format 'path.to.module:function' with
-    'path.to.module' being the relative path starting from the src folder created on
-    kedro initialisation.
-    The function will be called with the scheduled pipeline job as an argument just
-    after the job creation. Return values will be discarded.
-    Defaults to echoing the job.studio_url""",
-)
-@click.pass_obj
-@click.pass_context
-def run(
-    click_context: click.Context,
-    ctx: CliContext,
-    subscription_id: str,
-    aml_env: Optional[str],
-    image: Optional[str],
-    pipeline: str,
-    params: str,
-    wait_for_completion: bool,
-    env_var: Tuple[str],
-    load_versions: Dict[str, str],
-    on_job_scheduled: Optional[Callable],
-):
-    """Runs the specified pipeline in Azure ML Pipelines; Additional parameters can be passed from command line.
-    Can be used with --wait-for-completion param to block the caller until the pipeline finishes in Azure ML.
-    """
-    params = json.dumps(p) if (p := parse_runtime_params(params)) else ""
-
-    if subscription_id:
-        click.echo(f"Overriding Azure Subscription ID for run to: {subscription_id}")
-
-    if aml_env:
-        click.echo(f"Overriding Azure ML Environment for run by: {aml_env}")
-
-    warn_about_ignore_files()
-
-    verify_configuration_directory_for_azure(click_context, ctx)
-
-    mgr: KedroContextManager
-    extra_env = parse_extra_env_params(env_var)
-    with get_context_and_pipeline(
-        ctx, image, pipeline, params, aml_env, extra_env, load_versions
-    ) as (
-        mgr,
-        az_pipeline,
-    ):
-        az_client = AzureMLPipelinesClient(az_pipeline, subscription_id)
-
-        if not on_job_scheduled:
-            on_job_scheduled = default_job_callback
-
-        is_ok = az_client.run(
-            mgr.plugin_config.azure,
-            wait_for_completion,
-            on_job_scheduled,
-        )
-
-        if is_ok:
-            exit_code = 0
-            click.echo(
-                click.style(
-                    "Pipeline {} successfully".format(
-                        "finished" if wait_for_completion else "started"
-                    ),
-                    fg="green",
-                )
-            )
-        else:
-            exit_code = 1
-            click.echo(
-                click.style("There was an error while running the pipeline", fg="red")
-            )
-
-        click_context.exit(exit_code)
-
-
-@azureml_group.command()
-@click.option(
-    "--azureml-environment",
-    "--aml-env",
-    "aml_env",
-    type=str,
-    help="Azure ML Environment to use for pipeline execution.",
-)
-@click.option(
-    "-i",
-    "--image",
-    type=str,
-    help="Docker image to use for pipeline execution.",
-)
-@click.option(
-    "-p",
-    "--pipeline",
-    "pipeline",
-    type=str,
-    help="Name of pipeline to run",
-    default="__default__",
+    required=True,
+    help="Name(s) of job(s) from the 'jobs' config section to compile.",
 )
 @click.option(
     "--params",
@@ -331,7 +136,8 @@ def run(
     "--output",
     type=click.types.Path(exists=False, dir_okay=False),
     default="pipeline.yaml",
-    help="Pipeline YAML definition file.",
+    help="Pipeline YAML definition file. "
+    "With multiple jobs, each file is suffixed with the job name.",
 )
 @click.option(
     "--env-var",
@@ -351,24 +157,156 @@ def run(
 def compile(
     ctx: CliContext,
     aml_env: Optional[str],
-    image: Optional[str],
-    pipeline: str,
-    params: list,
+    job_names: Tuple[str],
+    params: str,
     output: str,
     env_var: Tuple[str],
     load_versions: Dict[str, str],
 ):
-    """Compiles the pipeline into YAML format"""
+    """Compile job pipeline(s) into YAML format."""
     params = json.dumps(p) if (p := parse_runtime_params(params)) else ""
     extra_env = parse_extra_env_params(env_var)
-    with get_context_and_pipeline(
-        ctx, image, pipeline, params, aml_env, extra_env, load_versions
-    ) as (
-        _,
-        az_pipeline,
-    ):
-        Path(output).write_text(str(az_pipeline))
-        click.echo(f"Compiled pipeline to {output}")
+
+    compile_job_pipelines(
+        ctx=ctx,
+        aml_env=aml_env,
+        params=params,
+        extra_env=extra_env,
+        load_versions=load_versions,
+        job_names=list(job_names),
+        output=output,
+    )
+
+
+@azureml_group.command()
+@click.option(
+    "-w",
+    "--workspace",
+    "workspace_name",
+    type=str,
+    default=None,
+    help="Named workspace from config to use for all jobs in this batch.",
+)
+@click.option(
+    "--azureml-environment",
+    "--aml-env",
+    "aml_env",
+    type=str,
+    help="Azure ML Environment to use for pipeline execution.",
+)
+@click.option(
+    "-j",
+    "--job",
+    "job_names",
+    type=str,
+    multiple=True,
+    required=True,
+    help="Name(s) of job(s) from the 'jobs' config section.",
+)
+@click.option(
+    "--params",
+    "params",
+    type=str,
+    help="Parameters override in form of JSON string",
+)
+@click.option(
+    "--env-var",
+    type=str,
+    multiple=True,
+    help="Environment variables to be injected in the steps, format: KEY=VALUE",
+)
+@click.option(
+    "--load-versions",
+    "-lv",
+    type=str,
+    default="",
+    help=LOAD_VERSION_HELP,
+    callback=_split_load_versions,
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Preview what would be submitted without actually calling Azure ML.",
+)
+@click.option(
+    "--once",
+    is_flag=True,
+    default=False,
+    help="Force immediate run even if the job has a schedule configured.",
+)
+@click.option(
+    "--wait-for-completion",
+    is_flag=True,
+    default=False,
+    help="Block until the pipeline run completes (useful in CI).",
+)
+@click.option(
+    "--on-job-scheduled",
+    type=str,
+    default=None,
+    callback=dynamic_import_job_schedule_func_from_str,
+    help="Callback function invoked after each job is scheduled, "
+    "format: path.to.module:function_name",
+)
+@click.pass_obj
+@click.pass_context
+def submit(
+    click_context: click.Context,
+    ctx: CliContext,
+    workspace_name: Optional[str],
+    aml_env: Optional[str],
+    job_names: Tuple[str],
+    params: str,
+    env_var: Tuple[str],
+    load_versions: Dict[str, str],
+    dry_run: bool,
+    once: bool,
+    wait_for_completion: bool,
+    on_job_scheduled: Optional[Callable],
+):
+    """Submit named jobs to Azure ML.
+
+    Jobs are defined in the 'jobs' section of azureml.yml. Each job specifies
+    its pipeline, optional schedule, display name, compute, and experiment.
+
+    Jobs with a schedule create persistent Azure ML schedules; jobs without
+    a schedule run immediately. Use --once to force an immediate run even
+    when a schedule is configured.
+    """
+    params = json.dumps(p) if (p := parse_runtime_params(params)) else ""
+
+    if workspace_name:
+        click.echo(f"Overriding workspace to: {workspace_name}")
+
+    if aml_env:
+        click.echo(f"Overriding Azure ML Environment to: {aml_env}")
+
+    warn_about_ignore_files()
+    verify_configuration_directory_for_azure(click_context, ctx)
+
+    extra_env = parse_extra_env_params(env_var)
+
+    is_ok = submit_scheduled_jobs(
+        ctx=ctx,
+        aml_env=aml_env,
+        params=params,
+        extra_env=extra_env,
+        load_versions=load_versions,
+        job_names=list(job_names),
+        dry_run=dry_run,
+        once=once,
+        wait_for_completion=wait_for_completion,
+        on_job_scheduled=on_job_scheduled,
+        workspace_override=workspace_name,
+    )
+
+    if is_ok:
+        click.echo(click.style("All jobs submitted successfully", fg="green"))
+        click_context.exit(0)
+    else:
+        click.echo(click.style("Some jobs failed to submit", fg="red"))
+        click_context.exit(1)
 
 
 @azureml_group.command(hidden=True)
@@ -419,19 +357,5 @@ def execute(
     data_paths = {**azure_inputs, **azure_outputs}
 
     with KedroContextManager(env=ctx.env, runtime_params=parameters) as mgr:
-        pipeline_data_passing = (
-            mgr.plugin_config.azure.pipeline_data_passing is not None
-            and mgr.plugin_config.azure.pipeline_data_passing.enabled
-        )
-        runner = AzurePipelinesRunner(
-            data_paths=data_paths, pipeline_data_passing=pipeline_data_passing
-        )
+        runner = AzurePipelinesRunner(data_paths=data_paths)
         mgr.session.run(pipeline, node_names=[node], runner=runner)
-
-    # 2. Save dummy outputs
-    # In distributed computing, it will only happen on nodes with rank 0
-    if not pipeline_data_passing and is_distributed_master_node():
-        for data_path in azure_outputs.values():
-            (Path(data_path) / "output.txt").write_text("#getindata")
-    else:
-        logger.info("Skipping saving Azure outputs on non-master distributed nodes")

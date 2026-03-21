@@ -1,6 +1,6 @@
 from kedro.framework.hooks import hook_impl
 
-from kedro_azureml.config import AzureMLConfig
+from kedro_azureml.config import WorkspaceConfig, WorkspacesConfig
 from kedro_azureml.datasets.asset_dataset import AzureMLAssetDataset
 from kedro_azureml.runner import AzurePipelinesRunner
 
@@ -14,7 +14,9 @@ class AzureMLLocalRunHook:
             context.config_loader.config_patterns.update(
                 {"azureml": ["azureml*", "azureml*/**", "**/azureml*"]}
             )
-        self.azure_config = AzureMLConfig(**context.config_loader["azureml"]["azure"])
+        self.azure_config = WorkspacesConfig.model_validate(
+            context.config_loader["azureml"]["workspace"]
+        ).resolve()
 
     @hook_impl
     def after_catalog_created(self, catalog):

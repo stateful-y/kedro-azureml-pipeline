@@ -160,7 +160,7 @@ venv.bak/
 
 credentials.json
 
-/mlruns/
+mlruns/
 /ga4/
 
 # terraform

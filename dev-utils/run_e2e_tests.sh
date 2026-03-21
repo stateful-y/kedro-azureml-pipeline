@@ -20,7 +20,6 @@ else
     export AZURE_TENANT_ID="${AZURE_TENANT_ID:-00000000-0000-0000-0000-000000000000}"
     export AZURE_CLIENT_ID="${AZURE_CLIENT_ID:-mock-client-id}"
     export AZURE_CLIENT_SECRET="${AZURE_CLIENT_SECRET:-mock-client-secret}"
-    export AZURE_STORAGE_ACCOUNT_KEY="${AZURE_STORAGE_ACCOUNT_KEY:-mock-storage-key}"
 fi
 
 echo "=== Local E2E Test Reproduction Script ==="
@@ -28,7 +27,7 @@ echo "This script reproduces the complete e2e test workflow including Docker and
 echo ""
 
 # Configuration
-E2E_CONFIG="${E2E_CONFIG:-e2e}"  # or "e2e_pipeline_data_passing"
+E2E_CONFIG="${E2E_CONFIG:-e2e}"
 WORK_DIR="$PROJECT_ROOT/local_e2e_test"
 DIST_DIR="$PROJECT_ROOT/dist"
 PROJECT_DIR="$WORK_DIR/spaceflights"
@@ -143,14 +142,14 @@ if [[ "$AZURE_SUBSCRIPTION_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo "🏃 Running on Azure ML Pipelines..."
-        kedro azureml run --wait-for-completion --env-var 'GETINDATA=ROCKS!'
+        kedro azureml submit -j e2e_test --once --wait-for-completion --env-var 'GETINDATA=ROCKS!'
         echo "✅ Azure ML pipeline execution completed!"
     else
         echo "ℹ️  Skipping Azure ML execution as requested"
     fi
 else
     echo "🔧 Mock credentials detected, running dry-run only..."
-    kedro azureml run --dry-run --env-var 'GETINDATA=ROCKS!' || echo "⚠️  Dry-run failed (expected with mock credentials)"
+    kedro azureml submit -j e2e_test --dry-run --env-var 'GETINDATA=ROCKS!' || echo "⚠️  Dry-run failed (expected with mock credentials)"
 fi
 
 echo ""
@@ -169,7 +168,7 @@ echo ""
 echo "🔧 Manual testing options:"
 echo "1. cd $PROJECT_DIR"
 echo "2. kedro run  # Local pipeline execution"
-echo "3. kedro azureml run --dry-run  # Validate Azure ML config"
+echo "3. kedro azureml submit -j e2e_test --dry-run  # Validate Azure ML config"
 if [[ "$REGISTRY_LOGIN_SERVER" != "localhost:5000" ]]; then
-    echo "4. kedro azureml run --wait-for-completion  # Run on Azure ML (requires real credentials)"
+    echo "4. kedro azureml submit -j e2e_test --once --wait-for-completion  # Run on Azure ML (requires real credentials)"
 fi

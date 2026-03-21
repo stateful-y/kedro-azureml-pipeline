@@ -21,7 +21,7 @@ def test_hook_after_context_created(
 ):
     context_mock = Mock(
         config_loader=MagicMock(
-            __getitem__=Mock(return_value={"azure": mock_azureml_config.to_dict()})
+            __getitem__=Mock(return_value={"workspace": {"__default__": mock_azureml_config.to_dict()}})
         )
     )
     context_mock.config_loader.config_patterns.keys.return_value = (
@@ -30,7 +30,7 @@ def test_hook_after_context_created(
 
     azureml_local_run_hook.after_context_created(context_mock)
     assert azureml_local_run_hook.azure_config.subscription_id == "123"
-    assert azureml_local_run_hook.azure_config.workspace_name == "best"
+    assert azureml_local_run_hook.azure_config.name == "best"
 
     azureml_local_run_hook.after_catalog_created(multi_catalog)
     for dataset_name in multi_catalog.filter():

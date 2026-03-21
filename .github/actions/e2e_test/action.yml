@@ -16,9 +16,6 @@ inputs:
     azure_client_secret:
         description: 'Azure Client Secret'
         required: true
-    azure_storage_account_key:
-        description: 'Azure Storage Account Key'
-        required: true
     azure_tenant_id:
         description: 'Azure Tenant ID'
         required: true
@@ -103,10 +100,9 @@ runs:
           shell: bash
           working-directory: ./spaceflights
           env:
-              AZURE_STORAGE_ACCOUNT_KEY: ${{ inputs.azure_storage_account_key }}
               AZURE_SUBSCRIPTION_ID: ${{ inputs.azure_subscription_id }}
               AZURE_TENANT_ID: ${{ inputs.azure_tenant_id }}
               AZURE_CLIENT_SECRET: ${{ inputs.azure_client_secret }}
               AZURE_CLIENT_ID: ${{ inputs.azure_client_id }}
           run: |
-              kedro azureml run --wait-for-completion --env-var 'GETINDATA=ROCKS!'
+              kedro azureml submit -j e2e_test --once --wait-for-completion --env-var 'GETINDATA=ROCKS!'

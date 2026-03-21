@@ -29,5 +29,5 @@ Since you need a docker container to run the job in Azure ML Pipelines, it needs
 COPY kedro-azureml-0.1.0.tar.gz .
 RUN pip install ./kedro-azureml-0.1.0.tar.gz
 ```
-4. Build the docker with `:latest` tag (make sure that `:latest` is specified in the plugin's config `azureml.yml` in `conf`), push the image and run the plugin.
+4. Build the docker with `:latest` tag, push the image and run the plugin.
 5. Done!
