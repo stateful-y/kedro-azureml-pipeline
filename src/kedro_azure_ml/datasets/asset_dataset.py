@@ -161,9 +161,9 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
         # Because `is_dir` and `is_file` don't work if the path does not
         # exist, we use this heuristic to identify paths vs folders.
         if self.path.suffix != "":
-            return str(self.path.parent)
+            return self.path.parent.as_posix()
         else:
-            return str(self.path)
+            return self.path.as_posix()
 
     def _construct_dataset(self) -> AbstractDataset:
         """Build the underlying dataset with the resolved filepath.

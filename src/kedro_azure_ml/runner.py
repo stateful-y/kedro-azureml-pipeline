@@ -100,7 +100,7 @@ class AzurePipelinesRunner(SequentialRunner):
                 ds = updated_catalog[ds_name]
                 if isinstance(ds, AzureMLPipelineDataset):
                     if isinstance(ds, AzureMLAssetDataset) and ds._azureml_type == "uri_file":
-                        ds.root_dir = str(Path(azure_dataset_path).parent)
+                        ds.root_dir = Path(azure_dataset_path).parent.as_posix()
                     else:
                         ds.root_dir = azure_dataset_path
                     updated_catalog[ds_name] = ds
