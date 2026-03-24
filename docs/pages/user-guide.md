@@ -304,41 +304,8 @@ Inject environment variables into Azure ML pipeline steps:
 kedro azureml run -j training --env-var API_KEY=secret --env-var DEBUG=1
 ```
 
-## Troubleshooting
-
-### Authentication errors
-
-Ensure your Azure credentials are configured. Run `az login` or set up a service principal. The plugin uses `DefaultAzureCredential` from the Azure Identity SDK.
-
-### Compute target not found
-
-Verify the cluster name in your `azureml.yml` matches an existing compute target in your Azure ML workspace:
-
-```bash
-az ml compute list --workspace-name <name> --resource-group <rg>
-```
-
-### Environment not found
-
-Check that the environment name (including version tag like `@latest`) exists in your Azure ML workspace:
-
-```bash
-az ml environment list --workspace-name <name> --resource-group <rg>
-```
-
-### Code upload issues
-
-If files are missing during remote execution, check your `.amlignore` file. It controls which files are excluded from the code snapshot upload.
-
-### Dataset version errors
-
-When using `AzureMLAssetDataset`, ensure the referenced Azure ML data asset exists and the version is accessible. Check with:
-
-```bash
-az ml data show --name <dataset_name> --workspace-name <name> --resource-group <rg>
-```
-
 ## Next steps
 
 - [Getting Started](getting-started.md) for installation and first submission
 - [API Reference](api-reference.md) for full module and class documentation
+- [FAQ & Troubleshooting](faq.md) for common questions and issue resolution

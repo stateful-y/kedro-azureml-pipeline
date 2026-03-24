@@ -127,11 +127,15 @@ This project is a fork of [kedro-azureml](https://github.com/getindata/kedro-azu
 
 We would also like to thank [Evolta Technologies](https://www.evolta-technologies.com/) for their support to the project.
 
+<br>
+
 <p align="center">
   <a href="https://www.evolta-technologies.com/">
     <img src="docs/assets/evolta_logo.png" alt="Evolta Technologies" width="400">
   </a>
 </p>
+
+<br>
 
 This project is maintained by [stateful-y](https://stateful-y.io), an ML consultancy specializing in MLOps and data science & engineering. If you're interested in collaborating or learning more about our services, please visit our website.
 

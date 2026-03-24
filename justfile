@@ -41,12 +41,12 @@ fix:
 
 # Build documentation
 build:
-    uv run mkdocs build --clean
+    uv run --group docs python -m mkdocs build --clean
 
 # Serve documentation locally
 serve:
     @echo "###### Starting local server. Press Control+C to stop server ######"
-    uv run mkdocs serve -a localhost:8080
+    uv run --group docs python -m mkdocs serve -a localhost:8080
 
 # Check built docs for dead links (build first with 'just build')
 link:

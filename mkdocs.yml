@@ -135,9 +135,11 @@ plugins:
 
 nav:
   - Home: index.md
+  - Introduction: pages/intro.md
   - Getting Started: pages/getting-started.md
   - User Guide: pages/user-guide.md
   - API Reference: pages/api-reference.md
+  - FAQ: pages/faq.md
   - Contributing: pages/contributing.md
 
 extra:
