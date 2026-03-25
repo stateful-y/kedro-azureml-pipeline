@@ -29,6 +29,10 @@ test-cov:
 test-docstrings:
     uv run pytest --doctest-modules --doctest-continue-on-failure --no-cov src/kedro_azureml_pipeline || [ $? -eq 5 ]
 
+# Run fast tests after pinning dependency versions (e.g. just test-compat some-package==1.0.0)
+test-compat +PINS='':
+    uvx nox -s test_compat -- {{PINS}}
+
 # Run linters and type checkers
 lint:
     uv run ruff check src tests
