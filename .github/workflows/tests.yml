@@ -52,9 +52,9 @@ jobs:
         run: nox -s test_fast --python ${{ matrix.python-version }}
 
   # Compatibility test against oldest supported dependency versions
-  # To enable, add version pins to the matrix, e.g.: pins: ["kedro==0.19.0"]
+  # Uncomment pins when compat pin files are added (e.g., "oldest", "legacy")
   test-compat:
-    if: false  # No compat pins configured yet — enable by replacing with pin entries
+    if: false  # disabled until pins are defined
     name: Compat tests (${{ matrix.pins }})
     runs-on: ubuntu-latest
     strategy:
