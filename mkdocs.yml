@@ -102,11 +102,6 @@ not_in_nav: |
   assets/README.md
   pages/api/*.md
   pages/api/generated/*.md
-  pages/getting-started.md
-  pages/user-guide.md
-  pages/contributing.md
-  pages/intro.md
-  pages/faq.md
 
 validation:
   nav:
@@ -140,13 +135,22 @@ plugins:
 
 nav:
   - Home: index.md
+  - Tutorials:
+    - Getting Started: pages/tutorials/getting-started.md
   - How-to Guides:
-    - Configuration: pages/how-to/configure.md
-    - Troubleshooting: pages/how-to/troubleshooting.md
+    - Schedule Pipelines: pages/how-to/schedule-pipelines.md
+    - Use Data Assets: pages/how-to/use-data-assets.md
+    - Run Distributed Training: pages/how-to/run-distributed-training.md
+    - Use MLflow: pages/how-to/use-mlflow.md
+    - Configure Multiple Workspaces: pages/how-to/configure-multiple-workspaces.md
+    - Troubleshoot: pages/how-to/troubleshoot.md
+    - Contribute: pages/how-to/contribute.md
   - Reference:
+    - Configuration: pages/reference/configuration.md
+    - CLI: pages/reference/cli.md
     - API: pages/reference/api.md
   - Explanation:
-    - Concepts: pages/explanation/concepts.md
+    - Architecture: pages/explanation/architecture.md
 
 extra:
   social:
