@@ -79,10 +79,13 @@ examples/__marimo__/
 
 # build
 uv.lock
-src/kedro_azure_ml/_version.py
+src/kedro_azureml_pipeline/_version.py
 
 # Auto-generated API submodule pages (created by docs/hooks.py)
 docs/pages/api/
+
+# Worktrees
+.worktrees/
 
 # AI Assistant Instructions
 CLAUDE.md

@@ -14,7 +14,7 @@ _SUBMODULE_CACHE = None
 def _get_submodules(project_root):
     """Discover public submodules in the package (cached).
 
-    Scans ``src/kedro_azure_ml/`` for ``.py`` files (excluding ``__init__``)
+    Scans ``src/kedro_azureml_pipeline/`` for ``.py`` files (excluding ``__init__``)
     and sub-packages with an ``__init__.py``.  Returns a sorted list of dicts
     with *module_name* and *module_doc* keys.
     """
@@ -22,7 +22,7 @@ def _get_submodules(project_root):
     if _SUBMODULE_CACHE is not None:
         return _SUBMODULE_CACHE
 
-    pkg_dir = project_root / "src" / "kedro_azure_ml"
+    pkg_dir = project_root / "src" / "kedro_azureml_pipeline"
     if not pkg_dir.exists():
         _SUBMODULE_CACHE = []
         return _SUBMODULE_CACHE
@@ -153,7 +153,7 @@ def _generate_api_pages(project_root):
     for old in generated_dir.glob("*.md"):
         old.unlink()
 
-    pkg_dir = project_root / "src" / "kedro_azure_ml"
+    pkg_dir = project_root / "src" / "kedro_azureml_pipeline"
     modules = _get_submodules(project_root)
 
     _page_template = (
@@ -181,13 +181,13 @@ def _generate_api_pages(project_root):
 
         # Generate submodule overview page with tables
         members_tables = _build_members_tables(
-            "kedro_azure_ml",
+            "kedro_azureml_pipeline",
             mod["module_name"],
             members,
         )
 
         content = template.format(
-            package_name="kedro_azure_ml",
+            package_name="kedro_azureml_pipeline",
             module_name=mod["module_name"],
             module_doc=mod["module_doc"],
             members_tables=members_tables,
@@ -198,13 +198,13 @@ def _generate_api_pages(project_root):
 
         # Generate per-class/function detail pages
         for cls in members["classes"]:
-            qualified = f"kedro_azure_ml.{mod['module_name']}.{cls['name']}"
+            qualified = f"kedro_azureml_pipeline.{mod['module_name']}.{cls['name']}"
             page = generated_dir / f"{qualified}.md"
             page.write_text(_page_template.format(name=cls["name"], qualified=qualified))
             member_count += 1
 
         for func in members["functions"]:
-            qualified = f"kedro_azure_ml.{mod['module_name']}.{func['name']}"
+            qualified = f"kedro_azureml_pipeline.{mod['module_name']}.{func['name']}"
             page = generated_dir / f"{qualified}.md"
             page.write_text(_page_template.format(name=func["name"], qualified=qualified))
             member_count += 1
@@ -221,7 +221,7 @@ def _build_api_table_html(project_root):
     with jQuery DataTables for client-side filtering and sorting.
     """
     modules = _get_submodules(project_root)
-    pkg_dir = project_root / "src" / "kedro_azure_ml"
+    pkg_dir = project_root / "src" / "kedro_azureml_pipeline"
 
     rows = []
     for mod in modules:
@@ -232,15 +232,15 @@ def _build_api_table_html(project_root):
             continue
 
         members = _get_module_members(mod_file)
-        module_label = f"kedro_azure_ml.{mod['module_name']}"
-        module_href = f"../api/{mod['module_name']}/"
+        module_label = f"kedro_azureml_pipeline.{mod['module_name']}"
+        module_href = f"../../api/{mod['module_name']}/"
 
         for cls in members["classes"]:
-            qualified = f"kedro_azure_ml.{mod['module_name']}.{cls['name']}"
+            qualified = f"kedro_azureml_pipeline.{mod['module_name']}.{cls['name']}"
             rows.append((cls["name"], "Class", module_label, module_href, cls["doc"], qualified))
 
         for func in members["functions"]:
-            qualified = f"kedro_azure_ml.{mod['module_name']}.{func['name']}"
+            qualified = f"kedro_azureml_pipeline.{mod['module_name']}.{func['name']}"
             rows.append((func["name"], "Function", module_label, module_href, func["doc"], qualified))
 
     rows.sort(key=lambda r: r[0].lower())
@@ -252,7 +252,7 @@ def _build_api_table_html(project_root):
 
     tbody_lines = []
     for name, kind, module_label, module_href, desc, qualified in rows:
-        href = f"../api/generated/{qualified}/"
+        href = f"../../api/generated/{qualified}/"
         badge_cls = _type_badge_cls.get(kind, "")
         tbody_lines.append(
             f"      <tr>"
@@ -307,6 +307,11 @@ def _build_api_table_html(project_root):
     )
 
 
+# ---------------------------------------------------------------------------
+# API sidebar module TOC
+# ---------------------------------------------------------------------------
+
+
 def _build_module_toc(config, current_src_path=None):
     """Build the module TOC list used by the api-submodule sidebar template.
 
@@ -328,7 +333,7 @@ def _build_module_toc(config, current_src_path=None):
     api_dir = docs_dir / "pages" / "api"
     project_root = docs_dir.parent
 
-    is_index = current_src_path is None or current_src_path == "pages/api-reference.md"
+    is_index = current_src_path is None or current_src_path == "pages/reference/api.md"
 
     modules = _get_submodules(project_root)
     module_toc = []
@@ -341,15 +346,15 @@ def _build_module_toc(config, current_src_path=None):
 
         # Compute relative URL
         if is_index:
-            # api-reference.md is at pages/api-reference/, submodule pages at pages/api/
-            page_url = f"../api/{md_filename.replace('.md', '/')}"
+            # reference/api.md is at pages/reference/api/, submodule pages at pages/api/
+            page_url = f"../../api/{md_filename.replace('.md', '/')}"
         else:
             page_url = f"../{md_filename.replace('.md', '/')}".replace("//", "/")
 
         active = current_src_path == f"pages/api/{md_filename}" if current_src_path else False
 
         entry = {
-            "title": f"kedro_azure_ml.{mod['module_name']}",
+            "title": f"kedro_azureml_pipeline.{mod['module_name']}",
             "url": page_url,
             "active": active,
             "children": [],
@@ -367,6 +372,10 @@ def _build_module_toc(config, current_src_path=None):
 
     return module_toc
 
+
+# ---------------------------------------------------------------------------
+# API page content post-processing
+# ---------------------------------------------------------------------------
 
 _GIT_REF_CACHE = None
 
@@ -429,10 +438,10 @@ def _process_api_page_content(html, page, config):
     """
     from mkdocs.structure.toc import AnchorLink
 
-    is_class_page = bool(re.search(r'<h3\s+id="kedro_azure_ml\.', html))
+    is_class_page = bool(re.search(r'<h3\s+id="kedro_azureml_pipeline\.', html))
 
     # Locate class-level content region
-    h2_match = re.search(r'<h2\s+id="kedro_azure_ml\.', html)
+    h2_match = re.search(r'<h2\s+id="kedro_azureml_pipeline\.', html)
     if not h2_match:
         return html
     h2_pos = h2_match.start()
@@ -698,7 +707,7 @@ def on_page_content(html, page, config, files):
     if src.startswith("pages/api/generated/"):
         html = _process_api_page_content(html, page, config)
 
-    if src == "pages/api-reference.md":
+    if src == "pages/reference/api.md":
         # API index: flat module list (api-index.html template)
         page.meta["module_toc"] = _build_module_toc(config, current_src_path=src)
     elif (
@@ -725,13 +734,17 @@ def on_page_markdown(markdown, page, config, files):
     if "<!-- API_TABLE -->" in markdown:
         table = _build_api_table_html(project_root)
         markdown = markdown.replace("<!-- API_TABLE -->", table)
+
     # Strip EXAMPLES_FOR placeholders when examples are disabled
     markdown = re.sub(r"<!-- EXAMPLES_FOR:[\w.]+ -->\n?", "", markdown)
+
     return markdown
 
 
 def on_pre_build(config):
+    """Generate API submodule pages."""
     project_root = Path(__file__).parent.parent
+
     # Generate per-submodule API reference pages
     _generate_api_pages(project_root)
 

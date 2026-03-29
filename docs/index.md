@@ -1,65 +1,81 @@
 ![](assets/logo_dark.png#only-dark){width=800}
 ![](assets/logo_light.png#only-light){width=800}
 
-# Welcome to Kedro Azure ML's documentation
+# Kedro AzureML Pipeline
 
-Kedro plugin for running Kedro pipelines on Azure ML Pipelines.
+Kedro AzureML Pipeline is a Kedro plugin that connects your data science project to [Azure ML Pipelines](https://learn.microsoft.com/en-us/azure/machine-learning/concept-ml-pipelines). With a single CLI command you can run, schedule, and monitor Kedro pipelines on Azure ML managed compute - without changing any of your existing Kedro code, catalog, or hooks.
 
 <div class="grid cards" markdown>
 
--  **Get Started in 5 Minutes**
+- **New here?**
 
     ---
 
-    Install Kedro Azure ML and submit your first pipeline to Azure ML
+    Deploy your first Kedro pipeline to Azure ML in one guided walkthrough.
 
-    Install → Configure → Submit → Done
+    [Getting Started Tutorial](pages/tutorials/getting-started.md)
 
-    [Getting Started](pages/getting-started.md)
-
-- **Need Help?**
+- **Doing something specific?**
 
     ---
 
-    Find answers to common questions and troubleshooting tips
+    Step-by-step instructions for scheduling, data assets, distributed training, MLflow, and more.
 
-    [FAQ & Troubleshooting](pages/user-guide.md#troubleshooting)
+    [How-to Guides](pages/how-to/schedule-pipelines.md)
 
-- **Learn the Concepts**
+- **Looking something up?**
 
     ---
 
-    Configuration, scheduling, distributed training, and data assets
+    Complete field tables for `azureml.yml` and all CLI flags.
 
-    [User Guide](pages/user-guide.md)
+    [Configuration Reference](pages/reference/configuration.md) - [CLI Reference](pages/reference/cli.md)
+
+- **Curious how it works?**
+
+    ---
+
+    Understand how the plugin translates Kedro into Azure ML steps and preserves your hooks.
+
+    [Architecture](pages/explanation/architecture.md)
 
 </div>
 
-## Table of Contents
+## Key capabilities
 
-### [Getting started](pages/getting-started.md)
+- **No code changes** - integrate Azure ML without touching your Kedro datasets, catalog, or pipelines
+- **Scheduling** - configure cron and recurrence schedules directly in `azureml.yml`
+- **Distributed training** - scale nodes across multiple GPU instances with `@distributed_job`
+- **Data asset management** - version and track data through Azure ML using `AzureMLAssetDataset`
+- **Full hook lifecycle** - all Kedro hooks fire during remote execution, including `kedro-mlflow`
+- **Multiple workspaces** - target dev, staging, and production workspaces from one config
 
-Step-by-step guide to installing and setting up Kedro Azure ML in your project.
+## Documentation
 
-- [Installation](pages/getting-started.md#installation)
-- [Configuration](pages/getting-started.md#configuration-overview)
-- [Submit a pipeline](pages/getting-started.md#submit-to-azure-ml)
+### Tutorials
 
-### [User guide](pages/user-guide.md)
+- [Getting Started](pages/tutorials/getting-started.md) - deploy your first pipeline end-to-end
 
-In-depth documentation covering configuration, CLI, and advanced features.
+### How-to Guides
 
-- [Configuration reference](pages/user-guide.md#configuration-reference)
-- [CLI commands](pages/user-guide.md#cli-commands)
-- [Scheduling](pages/user-guide.md#scheduling)
-- [Data assets](pages/user-guide.md#data-assets)
-- [Distributed training](pages/user-guide.md#distributed-training)
-- [MLflow integration](pages/user-guide.md#mlflow-integration)
+- [Schedule Pipelines](pages/how-to/schedule-pipelines.md)
+- [Use Data Assets](pages/how-to/use-data-assets.md)
+- [Run Distributed Training](pages/how-to/run-distributed-training.md)
+- [Use MLflow](pages/how-to/use-mlflow.md)
+- [Configure Multiple Workspaces](pages/how-to/configure-multiple-workspaces.md)
+- [Troubleshoot](pages/how-to/troubleshoot.md)
+- [Contribute](pages/how-to/contribute.md)
 
-### [Reference](pages/api-reference/)
+### Reference
 
-Detailed reference for the Kedro Azure ML API, including classes, functions, and configuration options.
+- [Configuration Reference](pages/reference/configuration.md)
+- [CLI Reference](pages/reference/cli.md)
+- [API Reference](pages/reference/api.md)
+
+### Explanation
+
+- [Architecture](pages/explanation/architecture.md)
 
 ## License
 
-Kedro Azure ML is open source and licensed under the [Apache-2.0 License](https://opensource.org/licenses/Apache-2.0). You are free to use, modify, and distribute this software under the terms of this license.
+Kedro AzureML Pipeline is open source and licensed under the [Apache-2.0 License](https://opensource.org/licenses/Apache-2.0).

@@ -6,9 +6,9 @@ from kedro.io.core import Version
 from kedro.pipeline import Pipeline
 from kedro_datasets.pickle import PickleDataset
 
-from kedro_azure_ml.datasets.asset_dataset import AzureMLAssetDataset
-from kedro_azure_ml.datasets.pipeline_dataset import AzureMLPipelineDataset
-from kedro_azure_ml.runner import AzurePipelinesRunner
+from kedro_azureml_pipeline.datasets.asset_dataset import AzureMLAssetDataset
+from kedro_azureml_pipeline.datasets.pipeline_dataset import AzureMLPipelineDataset
+from kedro_azureml_pipeline.runner import AzurePipelinesRunner
 
 
 class TestAzurePipelinesRunner:

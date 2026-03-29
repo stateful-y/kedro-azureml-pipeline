@@ -98,7 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/kedro_azure_ml
+      url: https://pypi.org/p/kedro_azureml_pipeline
     permissions:
       id-token: write
     steps:

@@ -1,4 +1,4 @@
-# Available commands for Kedro Azure ML
+# Available commands for Kedro AzureML Pipeline
 
 # Show all available commands
 default:
@@ -11,7 +11,7 @@ install:
 
 # Run tests and doctests with parallel execution
 test:
-    uv run pytest tests src/kedro_azure_ml --doctest-modules --doctest-continue-on-failure -n auto -v
+    uv run pytest tests src/kedro_azureml_pipeline --doctest-modules --doctest-continue-on-failure -n auto -v
 
 # Run fast tests (excludes slow and integration tests)
 test-fast:
@@ -23,11 +23,15 @@ test-slow:
 
 # Run tests with coverage
 test-cov:
-    uv run pytest --cov=kedro_azure_ml --cov-report=html --cov-report=term -n auto
+    uv run pytest --cov=kedro_azureml_pipeline --cov-report=html --cov-report=term -n auto
 
 # Run docstring examples
 test-docstrings:
-    uv run pytest --doctest-modules --doctest-continue-on-failure --no-cov src/kedro_azure_ml || [ $? -eq 5 ]
+    uv run pytest --doctest-modules --doctest-continue-on-failure --no-cov src/kedro_azureml_pipeline || [ $? -eq 5 ]
+
+# Run fast tests after pinning dependency versions (e.g. just test-compat some-package==1.0.0)
+test-compat +PINS='':
+    uvx nox -s test_compat -- {{PINS}}
 
 # Run linters and type checkers
 lint:
@@ -41,12 +45,12 @@ fix:
 
 # Build documentation
 build:
-    uv run mkdocs build --clean
+    uv run --group docs python -m mkdocs build --clean
 
 # Serve documentation locally
 serve:
     @echo "###### Starting local server. Press Control+C to stop server ######"
-    uv run mkdocs serve -a localhost:8080
+    uv run --group docs python -m mkdocs serve -a localhost:8080
 
 # Check built docs for dead links (build first with 'just build')
 link:

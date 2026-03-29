@@ -8,11 +8,11 @@ import yaml
 from click.testing import CliRunner
 from kedro.framework.startup import ProjectMetadata
 
-from kedro_azure_ml import cli
-from kedro_azure_ml.config import KedroAzureMLConfig
-from kedro_azure_ml.generator import AzureMLPipelineGenerator
-from kedro_azure_ml.runner import AzurePipelinesRunner
-from kedro_azure_ml.utils import CliContext
+from kedro_azureml_pipeline import cli
+from kedro_azureml_pipeline.config import KedroAzureMLConfig
+from kedro_azureml_pipeline.generator import AzureMLPipelineGenerator
+from kedro_azureml_pipeline.runner import AzurePipelinesRunner
+from kedro_azureml_pipeline.utils import CliContext
 from tests.utils import create_kedro_conf_dirs
 
 
@@ -59,8 +59,8 @@ class TestCompile:
         tmp_path: Path,
         runtime_params,
     ):
-        from kedro_azure_ml.config import JobConfig, PipelineFilterOptions
-        from kedro_azure_ml.manager import KedroContextManager
+        from kedro_azureml_pipeline.config import JobConfig, PipelineFilterOptions
+        from kedro_azureml_pipeline.manager import KedroContextManager
 
         dummy_plugin_config.jobs = {
             "test_job": JobConfig(
@@ -116,10 +116,10 @@ class TestExecute:
         patched_azure_runner = AzurePipelinesRunner(data_paths={})
         create_kedro_conf_dirs(tmp_path)
         with (
-            patch("kedro_azure_ml.runner.AzurePipelinesRunner", new=patched_azure_runner),
+            patch("kedro_azureml_pipeline.runner.AzurePipelinesRunner", new=patched_azure_runner),
             patch.dict("kedro.framework.project.pipelines", {"__default__": dummy_pipeline}),
             patch(
-                "kedro_azure_ml.manager.KedroContextManager.plugin_config",
+                "kedro_azureml_pipeline.manager.KedroContextManager.plugin_config",
                 new_callable=mock.PropertyMock,
                 return_value=dummy_plugin_config,
             ),
@@ -134,8 +134,8 @@ class TestExecute:
             assert result.exit_code == 0
 
 
-class TestSubmit:
-    """Tests for the ``kedro azureml submit`` CLI command."""
+class TestRun:
+    """Tests for the ``kedro azureml run`` CLI command."""
 
     @pytest.mark.parametrize(
         "aml_env",
@@ -176,8 +176,8 @@ class TestSubmit:
         extra_env: list,
         wait_for_completion: bool,
     ):
-        from kedro_azure_ml.config import JobConfig, PipelineFilterOptions
-        from kedro_azure_ml.manager import KedroContextManager
+        from kedro_azureml_pipeline.config import JobConfig, PipelineFilterOptions
+        from kedro_azureml_pipeline.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
         dummy_plugin_config.jobs = {
@@ -195,9 +195,9 @@ class TestSubmit:
         with (
             patch.dict("kedro.framework.project.pipelines", {"__default__": dummy_pipeline}),
             patch.object(Path, "cwd", return_value=tmp_path),
-            patch("kedro_azure_ml.client.MLClient") as ml_client_patched,
-            patch("kedro_azure_ml.auth.utils.DefaultAzureCredential") as default_credentials,
-            patch("kedro_azure_ml.auth.utils.InteractiveBrowserCredential") as interactive_credentials,
+            patch("kedro_azureml_pipeline.client.MLClient") as ml_client_patched,
+            patch("kedro_azureml_pipeline.auth.utils.DefaultAzureCredential") as default_credentials,
+            patch("kedro_azureml_pipeline.auth.utils.InteractiveBrowserCredential") as interactive_credentials,
             patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
             patch.object(KedroContextManager, "__exit__", return_value=False),
             patch.object(
@@ -217,8 +217,8 @@ class TestSubmit:
 
             runner = CliRunner()
             result = runner.invoke(
-                cli.submit,
-                ["--once", "-j", "test_job"]
+                cli.run,
+                ["-j", "test_job"]
                 + (["--aml-env", aml_env] if aml_env else [])
                 + (["--wait-for-completion"] if wait_for_completion else [])
                 + (sum([["--env-var", k] for k in extra_env[0]], [])),
@@ -241,7 +241,7 @@ class TestSubmit:
             populated_env_vars = list(created_pipeline.jobs.values())[0].environment_variables
             # Remove MLflow env vars for assertion (tested separately)
             for key in list(populated_env_vars.keys()):
-                if key.startswith("KEDRO_AZURE_ML_MLFLOW_"):
+                if key.startswith("KEDRO_AZUREML_MLFLOW_"):
                     del populated_env_vars[key]
             expected_env = {"KEDRO_ENV": "base", **extra_env[1]}
             assert populated_env_vars == expected_env
@@ -263,8 +263,8 @@ class TestSubmit:
         tmp_path: Path,
         on_job_scheduled_arg,
     ):
-        from kedro_azure_ml.config import JobConfig, PipelineFilterOptions
-        from kedro_azure_ml.manager import KedroContextManager
+        from kedro_azureml_pipeline.config import JobConfig, PipelineFilterOptions
+        from kedro_azureml_pipeline.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
         dummy_plugin_config.jobs = {
@@ -282,8 +282,8 @@ class TestSubmit:
         with (
             patch.dict("kedro.framework.project.pipelines", {"__default__": dummy_pipeline}),
             patch.object(Path, "cwd", return_value=tmp_path),
-            patch("kedro_azure_ml.client.MLClient"),
-            patch("kedro_azure_ml.auth.utils.DefaultAzureCredential"),
+            patch("kedro_azureml_pipeline.client.MLClient"),
+            patch("kedro_azureml_pipeline.auth.utils.DefaultAzureCredential"),
             patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
             patch.object(KedroContextManager, "__exit__", return_value=False),
             patch.object(
@@ -294,11 +294,11 @@ class TestSubmit:
             patch("tests.helpers.on_job_scheduled_helper.existing_function") as mock_callback,
         ):
             runner = CliRunner()
-            args = ["-j", "test_job", "--once"]
+            args = ["-j", "test_job"]
             if on_job_scheduled_arg:
                 args += ["--on-job-scheduled", on_job_scheduled_arg]
 
-            result = runner.invoke(cli.submit, args, obj=cli_context)
+            result = runner.invoke(cli.run, args, obj=cli_context)
             assert result.exit_code == 0, result.output
 
             if on_job_scheduled_arg:
@@ -323,7 +323,7 @@ class TestSubmit:
         with patch.object(Path, "cwd", return_value=tmp_path):
             runner = CliRunner()
             result = runner.invoke(
-                cli.submit,
+                cli.run,
                 ["-j", "any_job", "--on-job-scheduled", on_job_scheduled_arg],
                 obj=cli_context,
             )
@@ -365,13 +365,13 @@ class TestSubmit:
             patch.dict("kedro.framework.project.pipelines", {"__default__": dummy_pipeline}),
             patch.object(Path, "cwd", return_value=tmp_path),
             patch.dict(os.environ, {}),
-            patch("kedro_azure_ml.auth.utils.DefaultAzureCredential"),
+            patch("kedro_azureml_pipeline.auth.utils.DefaultAzureCredential"),
             patch("click.confirm", return_value=confirm) as click_confirm,
         ):
             runner = CliRunner()
-            result = runner.invoke(cli.submit, ["-j", "any_job"], obj=cli_context)
+            result = runner.invoke(cli.run, ["-j", "any_job"], obj=cli_context)
             assert result.exit_code == (1 if confirm else 2), (
-                "submit should have exited with code: 1 if confirmed, 2 if stopped"
+                "run should have exited with code: 1 if confirmed, 2 if stopped"
             )
             click_confirm.assert_called_once()
 
@@ -383,8 +383,8 @@ class TestSubmit:
         dummy_plugin_config,
         tmp_path: Path,
     ):
-        from kedro_azure_ml.config import JobConfig, PipelineFilterOptions
-        from kedro_azure_ml.manager import KedroContextManager
+        from kedro_azureml_pipeline.config import JobConfig, PipelineFilterOptions
+        from kedro_azureml_pipeline.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
         dummy_plugin_config.jobs = {
@@ -402,8 +402,8 @@ class TestSubmit:
         with (
             patch.dict("kedro.framework.project.pipelines", {"__default__": dummy_pipeline}),
             patch.object(Path, "cwd", return_value=tmp_path),
-            patch("kedro_azure_ml.client.MLClient") as ml_client_patched,
-            patch("kedro_azure_ml.auth.utils.DefaultAzureCredential"),
+            patch("kedro_azureml_pipeline.client.MLClient") as ml_client_patched,
+            patch("kedro_azureml_pipeline.auth.utils.DefaultAzureCredential"),
             patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
             patch.object(KedroContextManager, "__exit__", return_value=False),
             patch.object(
@@ -422,10 +422,9 @@ class TestSubmit:
                     "azureml",
                     "-e",
                     "base",
-                    "submit",
+                    "run",
                     "-j",
                     "test_job",
-                    "--once",
                 ],
                 obj=ProjectMetadata(
                     tmp_path,
@@ -453,13 +452,13 @@ class TestSubmit:
         with (
             patch.dict("kedro.framework.project.pipelines", {"__default__": dummy_pipeline}),
             patch.object(Path, "cwd", return_value=tmp_path),
-            patch("kedro_azure_ml.client.MLClient") as ml_client_patched,
-            patch("kedro_azure_ml.auth.utils.DefaultAzureCredential"),
+            patch("kedro_azureml_pipeline.client.MLClient") as ml_client_patched,
+            patch("kedro_azureml_pipeline.auth.utils.DefaultAzureCredential"),
         ):
             ml_client = ml_client_patched.from_config()
             ml_client.jobs.stream.side_effect = ValueError()
 
             runner = CliRunner()
-            result = runner.invoke(cli.submit, ["-j", "any_job", "--env-var", env_var], obj=cli_context)
+            result = runner.invoke(cli.run, ["-j", "any_job", "--env-var", env_var], obj=cli_context)
             assert result.exit_code == 1
             assert str(result.exception) == f"Invalid env-var: {env_var}, expected format: KEY=VALUE"

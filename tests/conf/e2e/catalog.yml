@@ -13,21 +13,21 @@ shuttles:
     engine: openpyxl
 
 preprocessed_companies:
-  type: kedro_azure_ml.datasets.AzureMLAssetDataset
+  type: kedro_azureml_pipeline.datasets.AzureMLAssetDataset
   azureml_dataset: e2e_tests_no_pdp
   dataset:
     type: pandas.ParquetDataset
     filepath: data/02_intermediate/preprocessed_companies.parquet
 
 preprocessed_shuttles:
-  type: kedro_azure_ml.datasets.AzureMLAssetDataset
+  type: kedro_azureml_pipeline.datasets.AzureMLAssetDataset
   azureml_dataset: e2e_tests_no_pdp
   dataset:
     type: pandas.ParquetDataset
     filepath: data/02_intermediate/preprocessed_shuttles.parquet
 
 model_input_table:
-  type: kedro_azure_ml.datasets.AzureMLAssetDataset
+  type: kedro_azureml_pipeline.datasets.AzureMLAssetDataset
   azureml_dataset: e2e_tests_no_pdp
   root_dir: data/02_intermediate
   dataset:
@@ -37,7 +37,7 @@ model_input_table:
       index: false
 
 regressor:
-  type: kedro_azure_ml.datasets.AzureMLAssetDataset
+  type: kedro_azureml_pipeline.datasets.AzureMLAssetDataset
   azureml_dataset: e2e_tests_pdp
   dataset:
     type: pickle.PickleDataset

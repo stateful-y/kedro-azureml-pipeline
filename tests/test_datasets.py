@@ -6,7 +6,7 @@ from kedro.io.core import VERSIONED_FLAG_KEY, DatasetError, Version
 from kedro_datasets.pandas import ParquetDataset
 from kedro_datasets.pickle import PickleDataset
 
-from kedro_azure_ml.datasets import (
+from kedro_azureml_pipeline.datasets import (
     AzureMLAssetDataset,
     AzureMLPipelineDataset,
 )

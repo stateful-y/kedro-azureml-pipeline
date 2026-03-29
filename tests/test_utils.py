@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from kedro_azure_ml.utils import update_dict
+from kedro_azureml_pipeline.utils import update_dict
 
 
 class TestUpdateDict:

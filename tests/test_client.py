@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from kedro_azure_ml.client import AzureMLPipelinesClient, _get_azureml_client
-from kedro_azure_ml.config import ClusterConfig, ComputeConfig, WorkspaceConfig
+from kedro_azureml_pipeline.client import AzureMLPipelinesClient, _get_azureml_client
+from kedro_azureml_pipeline.config import ClusterConfig, ComputeConfig, WorkspaceConfig
 
 
 @pytest.fixture
@@ -30,8 +30,8 @@ class TestGetAzureMLClient:
 
     def test_yields_ml_client(self, workspace_config):
         with (
-            patch("kedro_azure_ml.client.get_azureml_credentials") as mock_creds,
-            patch("kedro_azure_ml.client.MLClient") as mock_ml_client_cls,
+            patch("kedro_azureml_pipeline.client.get_azureml_credentials") as mock_creds,
+            patch("kedro_azureml_pipeline.client.MLClient") as mock_ml_client_cls,
         ):
             mock_creds.return_value = MagicMock()
             mock_ml_client_cls.from_config.return_value = MagicMock()
@@ -49,8 +49,8 @@ class TestGetAzureMLClient:
             # Call original or just store
 
         with (
-            patch("kedro_azure_ml.client.get_azureml_credentials") as mock_creds,
-            patch("kedro_azure_ml.client.MLClient") as mock_ml_client_cls,
+            patch("kedro_azureml_pipeline.client.get_azureml_credentials") as mock_creds,
+            patch("kedro_azureml_pipeline.client.MLClient") as mock_ml_client_cls,
         ):
             mock_creds.return_value = MagicMock()
             mock_ml_client_cls.from_config.return_value = MagicMock()
@@ -70,7 +70,7 @@ class TestAzureMLPipelinesClient:
     def test_run_submits_job(self, workspace_config, compute_config, mock_pipeline_job):
         client = AzureMLPipelinesClient(mock_pipeline_job)
 
-        with patch("kedro_azure_ml.client._get_azureml_client") as mock_ctx:
+        with patch("kedro_azureml_pipeline.client._get_azureml_client") as mock_ctx:
             mock_ml_client = MagicMock()
             mock_ml_client.compute.get.return_value = MagicMock(
                 name="cpu-cluster", size="Standard_DS3_v2", min_instances=0, max_instances=4
@@ -87,7 +87,7 @@ class TestAzureMLPipelinesClient:
     def test_run_with_display_name_override(self, workspace_config, compute_config, mock_pipeline_job):
         client = AzureMLPipelinesClient(mock_pipeline_job)
 
-        with patch("kedro_azure_ml.client._get_azureml_client") as mock_ctx:
+        with patch("kedro_azureml_pipeline.client._get_azureml_client") as mock_ctx:
             mock_ml_client = MagicMock()
             mock_ml_client.compute.get.return_value = MagicMock(
                 name="cpu-cluster", size="Standard_DS3_v2", min_instances=0, max_instances=4
@@ -103,7 +103,7 @@ class TestAzureMLPipelinesClient:
         client = AzureMLPipelinesClient(mock_pipeline_job)
         callback = MagicMock()
 
-        with patch("kedro_azure_ml.client._get_azureml_client") as mock_ctx:
+        with patch("kedro_azureml_pipeline.client._get_azureml_client") as mock_ctx:
             mock_ml_client = MagicMock()
             mock_ml_client.compute.get.return_value = MagicMock(
                 name="cpu-cluster", size="Standard_DS3_v2", min_instances=0, max_instances=4
@@ -118,7 +118,7 @@ class TestAzureMLPipelinesClient:
     def test_run_wait_for_completion_returns_true_on_success(self, workspace_config, compute_config, mock_pipeline_job):
         client = AzureMLPipelinesClient(mock_pipeline_job)
 
-        with patch("kedro_azure_ml.client._get_azureml_client") as mock_ctx:
+        with patch("kedro_azureml_pipeline.client._get_azureml_client") as mock_ctx:
             mock_ml_client = MagicMock()
             mock_ml_client.compute.get.return_value = MagicMock(
                 name="cpu-cluster", size="Standard_DS3_v2", min_instances=0, max_instances=4
@@ -134,7 +134,7 @@ class TestAzureMLPipelinesClient:
     def test_run_wait_for_completion_returns_false_on_error(self, workspace_config, compute_config, mock_pipeline_job):
         client = AzureMLPipelinesClient(mock_pipeline_job)
 
-        with patch("kedro_azure_ml.client._get_azureml_client") as mock_ctx:
+        with patch("kedro_azureml_pipeline.client._get_azureml_client") as mock_ctx:
             mock_ml_client = MagicMock()
             mock_ml_client.compute.get.return_value = MagicMock(
                 name="cpu-cluster", size="Standard_DS3_v2", min_instances=0, max_instances=4

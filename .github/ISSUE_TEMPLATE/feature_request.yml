@@ -28,7 +28,7 @@ body:
       description: Show how you'd like to use this feature (optional)
       render: python
       placeholder: |
-        from kedro_azure_ml import new_feature
+        from kedro_azureml_pipeline import new_feature
         result = new_feature()
 
   - type: textarea

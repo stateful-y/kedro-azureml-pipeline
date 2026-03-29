@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import click
 import pytest
 
-from kedro_azure_ml.cli_functions import (
+from kedro_azureml_pipeline.cli_functions import (
     default_job_callback,
     dynamic_import_job_schedule_func_from_str,
     parse_extra_env_params,
@@ -14,7 +14,7 @@ from kedro_azure_ml.cli_functions import (
     verify_configuration_directory_for_azure,
     warn_about_ignore_files,
 )
-from kedro_azure_ml.utils import CliContext
+from kedro_azureml_pipeline.utils import CliContext
 
 
 class TestParseRuntimeParams:

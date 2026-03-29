@@ -5,8 +5,8 @@ import pytest
 from kedro.config import OmegaConfigLoader
 from kedro.framework.context import KedroContext
 
-from kedro_azure_ml.config import KedroAzureMLConfig
-from kedro_azure_ml.manager import KedroContextManager
+from kedro_azureml_pipeline.config import KedroAzureMLConfig
+from kedro_azureml_pipeline.manager import KedroContextManager
 
 
 class TestKedroContextManager:

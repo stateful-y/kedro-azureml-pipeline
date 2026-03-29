@@ -3,7 +3,7 @@
 import os
 from unittest.mock import MagicMock, patch
 
-from kedro_azure_ml.auth.utils import get_azureml_credentials
+from kedro_azureml_pipeline.auth.utils import get_azureml_credentials
 
 
 class TestGetAzureMLCredentials:
@@ -11,8 +11,8 @@ class TestGetAzureMLCredentials:
 
     def test_returns_default_credential_when_valid(self):
         with (
-            patch("kedro_azure_ml.auth.utils.DefaultAzureCredential") as mock_default,
-            patch("kedro_azure_ml.auth.utils.InteractiveBrowserCredential") as mock_interactive,
+            patch("kedro_azureml_pipeline.auth.utils.DefaultAzureCredential") as mock_default,
+            patch("kedro_azureml_pipeline.auth.utils.InteractiveBrowserCredential") as mock_interactive,
         ):
             mock_default.return_value = MagicMock()
             result = get_azureml_credentials()
@@ -23,8 +23,8 @@ class TestGetAzureMLCredentials:
 
     def test_falls_back_to_interactive_on_failure(self):
         with (
-            patch("kedro_azure_ml.auth.utils.DefaultAzureCredential") as mock_default,
-            patch("kedro_azure_ml.auth.utils.InteractiveBrowserCredential") as mock_interactive,
+            patch("kedro_azureml_pipeline.auth.utils.DefaultAzureCredential") as mock_default,
+            patch("kedro_azureml_pipeline.auth.utils.InteractiveBrowserCredential") as mock_interactive,
         ):
             mock_default.return_value.get_token.side_effect = ValueError("no token")
             mock_interactive.return_value = MagicMock()
@@ -37,8 +37,8 @@ class TestGetAzureMLCredentials:
     def test_excludes_managed_identity_on_azureml_compute(self):
         with (
             patch.dict(os.environ, {"MSI_ENDPOINT": "http://fake"}),
-            patch("kedro_azure_ml.auth.utils.DefaultAzureCredential") as mock_default,
-            patch("kedro_azure_ml.auth.utils.InteractiveBrowserCredential"),
+            patch("kedro_azureml_pipeline.auth.utils.DefaultAzureCredential") as mock_default,
+            patch("kedro_azureml_pipeline.auth.utils.InteractiveBrowserCredential"),
         ):
             mock_default.return_value = MagicMock()
             get_azureml_credentials()
@@ -50,8 +50,8 @@ class TestGetAzureMLCredentials:
         env.pop("MSI_ENDPOINT", None)
         with (
             patch.dict(os.environ, env, clear=True),
-            patch("kedro_azure_ml.auth.utils.DefaultAzureCredential") as mock_default,
-            patch("kedro_azure_ml.auth.utils.InteractiveBrowserCredential"),
+            patch("kedro_azureml_pipeline.auth.utils.DefaultAzureCredential") as mock_default,
+            patch("kedro_azureml_pipeline.auth.utils.InteractiveBrowserCredential"),
         ):
             mock_default.return_value = MagicMock()
             get_azureml_credentials()

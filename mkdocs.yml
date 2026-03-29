@@ -1,8 +1,8 @@
-site_name: Kedro Azure ML
+site_name: Kedro AzureML Pipeline
 site_description: Kedro plugin with Azure ML Pipelines support
-site_url: https://kedro-azure-ml.readthedocs.io/
-repo_url: https://github.com/stateful-y/kedro-azure-ml
-repo_name: stateful-y/kedro-azure-ml
+site_url: https://kedro-azureml-pipeline.readthedocs.io/
+repo_url: https://github.com/stateful-y/kedro-azureml-pipeline
+repo_name: stateful-y/kedro-azureml-pipeline
 edit_uri: edit/main/docs/
 
 hooks:
@@ -31,7 +31,6 @@ theme:
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
-
   features:
     - content.code.copy
     - content.code.annotate
@@ -135,15 +134,27 @@ plugins:
 
 nav:
   - Home: index.md
-  - Getting Started: pages/getting-started.md
-  - User Guide: pages/user-guide.md
-  - API Reference: pages/api-reference.md
-  - Contributing: pages/contributing.md
+  - Tutorials:
+    - Getting Started: pages/tutorials/getting-started.md
+  - How-to Guides:
+    - Schedule Pipelines: pages/how-to/schedule-pipelines.md
+    - Use Data Assets: pages/how-to/use-data-assets.md
+    - Run Distributed Training: pages/how-to/run-distributed-training.md
+    - Use MLflow: pages/how-to/use-mlflow.md
+    - Configure Multiple Workspaces: pages/how-to/configure-multiple-workspaces.md
+    - Troubleshoot: pages/how-to/troubleshoot.md
+    - Contribute: pages/how-to/contribute.md
+  - Reference:
+    - Configuration: pages/reference/configuration.md
+    - CLI: pages/reference/cli.md
+    - API: pages/reference/api.md
+  - Explanation:
+    - Architecture: pages/explanation/architecture.md
 
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/stateful-y/kedro-azure-ml
+      link: https://github.com/stateful-y/kedro-azureml-pipeline
 
 watch:
   - mkdocs.yml

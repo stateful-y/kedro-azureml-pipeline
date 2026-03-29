@@ -1,5 +1,5 @@
 [project]
-name = "kedro_azure_ml"
+name = "kedro_azureml_pipeline"
 dynamic = ["version"]
 description = "Kedro plugin with Azure ML Pipelines support"
 readme = "README.md"
@@ -22,7 +22,7 @@ classifiers = [
 dependencies = [
     "kedro>=1.0.0",
     "kedro-datasets>=1.0.0",
-    "pydantic>=2.6.4,<2.11.0",
+    "pydantic>=2.6.4",
     "cloudpickle>=3.0.0",
     "azure-ai-ml>=1.2.0",
     "pyarrow>=18.0.0",
@@ -36,11 +36,11 @@ mlflow = [
 ]
 
 [project.entry-points."kedro.project_commands"]
-azureml = "kedro_azure_ml.cli:commands"
+azureml = "kedro_azureml_pipeline.cli:commands"
 
 [project.entry-points."kedro.hooks"]
-azure_local_run_hook = "kedro_azure_ml.hooks:azureml_local_run_hook"
-mlflow_azureml_hook = "kedro_azure_ml.mlflow_hook:mlflow_azureml_hook"
+azure_local_run_hook = "kedro_azureml_pipeline.hooks:azureml_local_run_hook"
+mlflow_azureml_hook = "kedro_azureml_pipeline.mlflow_hook:mlflow_azureml_hook"
 
 [dependency-groups]
 dev = [
@@ -75,31 +75,31 @@ fix = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/stateful-y/kedro-azure-ml"
-Documentation = "https://kedro-azure-ml.readthedocs.io"
-Repository = "https://github.com/stateful-y/kedro-azure-ml"
-"Bug Tracker" = "https://github.com/stateful-y/kedro-azure-ml/issues"
+Homepage = "https://github.com/stateful-y/kedro-azureml-pipeline"
+Documentation = "https://kedro-azureml-pipeline.readthedocs.io"
+Repository = "https://github.com/stateful-y/kedro-azureml-pipeline"
+"Bug Tracker" = "https://github.com/stateful-y/kedro-azureml-pipeline/issues"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/kedro_azure_ml"]
+packages = ["src/kedro_azureml_pipeline"]
 
 [tool.hatch.version]
 source = "vcs"
 fallback-version = "0.0.0"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/kedro_azure_ml/_version.py"
+version-file = "src/kedro_azureml_pipeline/_version.py"
 
 [tool.ruff]
 line-length = 120
 target-version = "py311"
 src = ["src", "tests"]
 show-fixes = true
-exclude = ["src/kedro_azure_ml/_version.py"]
+exclude = ["src/kedro_azureml_pipeline/_version.py"]
 
 [tool.ruff.format]
 preview = true
@@ -134,14 +134,14 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*" = ["ARG", "S101", "T201", "PLR2004"]  # Allow assert statements, prints, and magic values in tests
 "docs/**/*" = ["T201", "ARG001", "PLW0603", "SIM105", "SIM108"]  # Allow prints, unused args, globals, and simplifiable patterns in documentation hooks
-"src/kedro_azure_ml/cli.py" = ["ARG001"]  # Click callbacks receive unused context
-"src/kedro_azure_ml/cli_functions.py" = ["ARG001"]  # Click callbacks receive unused context/param
-"src/kedro_azure_ml/hooks.py" = ["ARG002"]  # Kedro hook signatures require specific args
-"src/kedro_azure_ml/mlflow_hook.py" = ["ARG002"]  # Kedro hook signatures require specific args
-"src/kedro_azure_ml/generator.py" = ["ARG002"]  # Method overrides require specific args
+"src/kedro_azureml_pipeline/cli.py" = ["ARG001"]  # Click callbacks receive unused context
+"src/kedro_azureml_pipeline/cli_functions.py" = ["ARG001"]  # Click callbacks receive unused context/param
+"src/kedro_azureml_pipeline/hooks.py" = ["ARG002"]  # Kedro hook signatures require specific args
+"src/kedro_azureml_pipeline/mlflow_hook.py" = ["ARG002"]  # Kedro hook signatures require specific args
+"src/kedro_azureml_pipeline/generator.py" = ["ARG002"]  # Method overrides require specific args
 
 [tool.ruff.lint.isort]
-known-first-party = ["kedro_azure_ml"]
+known-first-party = ["kedro_azureml_pipeline"]
 
 [tool.interrogate]
 ignore-init-method = true
@@ -169,7 +169,7 @@ addopts = [
     "--strict-markers",
     "--strict-config",
     "--color=yes",
-    "--cov=kedro_azure_ml",
+    "--cov=kedro_azureml_pipeline",
     "--cov-report=term-missing:skip-covered",
     "--cov-report=html",
     "--cov-report=xml",
@@ -180,10 +180,10 @@ markers = [
 ]
 
 [tool.coverage.paths]
-source = ["src/kedro_azure_ml"]
+source = ["src/kedro_azureml_pipeline"]
 
 [tool.coverage.run]
-source = ["kedro_azure_ml"]
+source = ["kedro_azureml_pipeline"]
 branch = true
 parallel = true
 sigterm = true
@@ -223,6 +223,7 @@ exclude = ["CHANGELOG.md", "site", "htmlcov", ".nox", ".venv"]
 
 [tool.rumdl.per-file-ignores]
 ".github/PULL_REQUEST_TEMPLATE.md" = ["MD041"]  # PR template starts with checklist
+".github/skills/**" = ["MD007"]  # Nested lists in skill files use variable indent
 "README.md" = ["MD041"]  # README starts with logo, not heading
 "docs/index.md" = ["MD041"]  # Landing page starts with logo, not heading
 "CONTRIBUTING.md" = ["MD057"]  # Relative link to docs/ is valid at project level

@@ -9,7 +9,7 @@ import yaml
 from azure.ai.ml.entities import CronTrigger, JobSchedule, RecurrenceTrigger
 from kedro.pipeline import Pipeline, node, pipeline
 
-from kedro_azure_ml.config import (
+from kedro_azureml_pipeline.config import (
     _CONFIG_TEMPLATE,
     CronScheduleConfig,
     JobConfig,
@@ -19,8 +19,8 @@ from kedro_azure_ml.config import (
     RecurrenceScheduleConfig,
     ScheduleConfig,
 )
-from kedro_azure_ml.generator import AzureMLPipelineGenerator
-from kedro_azure_ml.scheduler import (
+from kedro_azureml_pipeline.generator import AzureMLPipelineGenerator
+from kedro_azureml_pipeline.scheduler import (
     build_job_schedule,
     build_trigger,
     resolve_schedule,
@@ -282,8 +282,8 @@ class TestScheduler:
         assert schedule.name == "test_schedule"
 
 
-class TestSubmitCLI:
-    def test_submit_dry_run(
+class TestScheduleCLI:
+    def test_schedule_dry_run(
         self,
         tagged_pipeline,
         dummy_plugin_config,
@@ -295,8 +295,8 @@ class TestSubmitCLI:
         """--dry-run should report what would be created without calling Azure."""
         from click.testing import CliRunner
 
-        from kedro_azure_ml import cli
-        from kedro_azure_ml.manager import KedroContextManager
+        from kedro_azureml_pipeline import cli
+        from kedro_azureml_pipeline.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
 
@@ -329,7 +329,7 @@ class TestSubmitCLI:
         ):
             runner = CliRunner()
             result = runner.invoke(
-                cli.submit,
+                cli.schedule,
                 ["-j", "test_job", "--dry-run"],
                 obj=cli_context,
             )
@@ -337,7 +337,7 @@ class TestSubmitCLI:
             assert "[DRY RUN]" in result.output
             assert "test_job" in result.output
 
-    def test_submit_job_filter(
+    def test_schedule_job_filter(
         self,
         tagged_pipeline,
         dummy_plugin_config,
@@ -349,8 +349,8 @@ class TestSubmitCLI:
         """--job flag should filter to only the named job."""
         from click.testing import CliRunner
 
-        from kedro_azure_ml import cli
-        from kedro_azure_ml.manager import KedroContextManager
+        from kedro_azureml_pipeline import cli
+        from kedro_azureml_pipeline.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
 
@@ -386,7 +386,7 @@ class TestSubmitCLI:
         ):
             runner = CliRunner()
             result = runner.invoke(
-                cli.submit,
+                cli.schedule,
                 ["--dry-run", "-j", "job_a"],
                 obj=cli_context,
             )
@@ -395,7 +395,7 @@ class TestSubmitCLI:
             assert "job_b" not in result.output
             assert "1 succeeded" in result.output
 
-    def test_submit_missing_job_name_errors(
+    def test_schedule_missing_job_name_errors(
         self,
         dummy_plugin_config,
         patched_kedro_package,
@@ -405,8 +405,8 @@ class TestSubmitCLI:
         """Requesting a non-existent job name should error."""
         from click.testing import CliRunner
 
-        from kedro_azure_ml import cli
-        from kedro_azure_ml.manager import KedroContextManager
+        from kedro_azureml_pipeline import cli
+        from kedro_azureml_pipeline.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
 
@@ -431,25 +431,25 @@ class TestSubmitCLI:
         ):
             runner = CliRunner()
             result = runner.invoke(
-                cli.submit,
+                cli.schedule,
                 ["--dry-run", "-j", "nonexistent"],
                 obj=cli_context,
             )
             assert result.exit_code != 0
             assert "not found" in result.output
 
-    def test_submit_no_jobs_config_errors(
+    def test_schedule_no_jobs_config_errors(
         self,
         dummy_plugin_config,
         patched_kedro_package,
         cli_context,
         tmp_path,
     ):
-        """Submit should error when no jobs section exists in config."""
+        """Schedule should error when no jobs section exists in config."""
         from click.testing import CliRunner
 
-        from kedro_azure_ml import cli
-        from kedro_azure_ml.manager import KedroContextManager
+        from kedro_azureml_pipeline import cli
+        from kedro_azureml_pipeline.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
 
@@ -467,9 +467,163 @@ class TestSubmitCLI:
         ):
             runner = CliRunner()
             result = runner.invoke(
-                cli.submit,
+                cli.schedule,
                 ["-j", "any_job", "--dry-run"],
                 obj=cli_context,
             )
             assert result.exit_code != 0
             assert "No 'jobs' section" in result.output
+
+    def test_schedule_job_without_schedule_config_errors(
+        self,
+        tagged_pipeline,
+        dummy_plugin_config,
+        multi_catalog,
+        patched_kedro_package,
+        cli_context,
+        tmp_path,
+    ):
+        """Schedule should error when a job has no schedule configured."""
+        from click.testing import CliRunner
+
+        from kedro_azureml_pipeline import cli
+        from kedro_azureml_pipeline.manager import KedroContextManager
+
+        create_kedro_conf_dirs(tmp_path)
+
+        dummy_plugin_config.jobs = {
+            "no_schedule_job": JobConfig(
+                pipeline=PipelineFilterOptions(pipeline_name="__default__"),
+            ),
+        }
+
+        mock_mgr = MagicMock(spec=KedroContextManager)
+        mock_mgr.plugin_config = dummy_plugin_config
+        mock_mgr.context.params = {}
+        mock_mgr.context.catalog = multi_catalog
+        mock_mgr.context.config_loader.__getitem__ = MagicMock(side_effect=KeyError("mlflow"))
+
+        with (
+            patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
+            patch.object(KedroContextManager, "__exit__", return_value=False),
+            patch.object(
+                AzureMLPipelineGenerator,
+                "get_kedro_pipeline",
+                return_value=tagged_pipeline,
+            ),
+            patch.object(Path, "cwd", return_value=tmp_path),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli.schedule,
+                ["-j", "no_schedule_job", "--dry-run"],
+                obj=cli_context,
+            )
+            assert result.exit_code != 0
+            assert "no schedule configured" in result.output
+
+
+class TestRunCLI:
+    def test_run_dry_run(
+        self,
+        tagged_pipeline,
+        dummy_plugin_config,
+        multi_catalog,
+        patched_kedro_package,
+        cli_context,
+        tmp_path,
+    ):
+        """--dry-run should report what would be run without calling Azure."""
+        from click.testing import CliRunner
+
+        from kedro_azureml_pipeline import cli
+        from kedro_azureml_pipeline.manager import KedroContextManager
+
+        create_kedro_conf_dirs(tmp_path)
+
+        dummy_plugin_config.jobs = {
+            "test_job": JobConfig(
+                pipeline=PipelineFilterOptions(pipeline_name="__default__"),
+            ),
+        }
+
+        mock_mgr = MagicMock(spec=KedroContextManager)
+        mock_mgr.plugin_config = dummy_plugin_config
+        mock_mgr.context.params = {}
+        mock_mgr.context.catalog = multi_catalog
+        mock_mgr.context.config_loader.__getitem__ = MagicMock(side_effect=KeyError("mlflow"))
+
+        with (
+            patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
+            patch.object(KedroContextManager, "__exit__", return_value=False),
+            patch.object(
+                AzureMLPipelineGenerator,
+                "get_kedro_pipeline",
+                return_value=tagged_pipeline,
+            ),
+            patch.object(Path, "cwd", return_value=tmp_path),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli.run,
+                ["-j", "test_job", "--dry-run"],
+                obj=cli_context,
+            )
+            assert result.exit_code == 0, result.output
+            assert "[DRY RUN]" in result.output
+            assert "Would run" in result.output
+            assert "test_job" in result.output
+
+    def test_run_ignores_schedule_config(
+        self,
+        tagged_pipeline,
+        dummy_plugin_config,
+        multi_catalog,
+        patched_kedro_package,
+        cli_context,
+        tmp_path,
+    ):
+        """run should ignore schedule config and run immediately."""
+        from click.testing import CliRunner
+
+        from kedro_azureml_pipeline import cli
+        from kedro_azureml_pipeline.manager import KedroContextManager
+
+        create_kedro_conf_dirs(tmp_path)
+
+        dummy_plugin_config.schedules = {
+            "daily": ScheduleConfig(cron=CronScheduleConfig(expression="0 6 * * *")),
+        }
+        dummy_plugin_config.jobs = {
+            "scheduled_job": JobConfig(
+                pipeline=PipelineFilterOptions(pipeline_name="__default__"),
+                schedule="daily",
+            ),
+        }
+
+        mock_mgr = MagicMock(spec=KedroContextManager)
+        mock_mgr.plugin_config = dummy_plugin_config
+        mock_mgr.context.params = {}
+        mock_mgr.context.catalog = multi_catalog
+        mock_mgr.context.config_loader.__getitem__ = MagicMock(side_effect=KeyError("mlflow"))
+
+        with (
+            patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
+            patch.object(KedroContextManager, "__exit__", return_value=False),
+            patch.object(
+                AzureMLPipelineGenerator,
+                "get_kedro_pipeline",
+                return_value=tagged_pipeline,
+            ),
+            patch.object(Path, "cwd", return_value=tmp_path),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli.run,
+                ["-j", "scheduled_job", "--dry-run"],
+                obj=cli_context,
+            )
+            assert result.exit_code == 0, result.output
+            assert "[DRY RUN]" in result.output
+            assert "Would run" in result.output
+            assert "Would create schedule" not in result.output

@@ -3,14 +3,14 @@ from unittest.mock import MagicMock, patch
 import pytest
 from azure.ai.ml.entities import Job
 
-from kedro_azure_ml.config import ClusterConfig
-from kedro_azure_ml.constants import (
-    KEDRO_AZURE_ML_MLFLOW_ENABLED,
-    KEDRO_AZURE_ML_MLFLOW_EXPERIMENT_NAME,
-    KEDRO_AZURE_ML_MLFLOW_NODE_NAME,
-    KEDRO_AZURE_ML_MLFLOW_RUN_NAME,
+from kedro_azureml_pipeline.config import ClusterConfig
+from kedro_azureml_pipeline.constants import (
+    KEDRO_AZUREML_MLFLOW_ENABLED,
+    KEDRO_AZUREML_MLFLOW_EXPERIMENT_NAME,
+    KEDRO_AZUREML_MLFLOW_NODE_NAME,
+    KEDRO_AZUREML_MLFLOW_RUN_NAME,
 )
-from kedro_azure_ml.generator import AzureMLPipelineGenerator, ConfigException
+from kedro_azureml_pipeline.generator import AzureMLPipelineGenerator, ConfigException
 
 
 class TestPipelineGeneration:
@@ -227,10 +227,10 @@ class TestMlflowEnvVarInjection:
 
         for node_name, node_job in az_pipeline.jobs.items():
             env = node_job.environment_variables
-            assert env[KEDRO_AZURE_ML_MLFLOW_ENABLED] == "1"
-            assert env[KEDRO_AZURE_ML_MLFLOW_RUN_NAME] == "my-run"
-            assert env[KEDRO_AZURE_ML_MLFLOW_EXPERIMENT_NAME] == "my-experiment"
-            assert env[KEDRO_AZURE_ML_MLFLOW_NODE_NAME] == node_name
+            assert env[KEDRO_AZUREML_MLFLOW_ENABLED] == "1"
+            assert env[KEDRO_AZUREML_MLFLOW_RUN_NAME] == "my-run"
+            assert env[KEDRO_AZUREML_MLFLOW_EXPERIMENT_NAME] == "my-experiment"
+            assert env[KEDRO_AZUREML_MLFLOW_NODE_NAME] == node_name
 
     def test_mlflow_env_vars_absent_when_no_experiment(self, dummy_plugin_config, dummy_pipeline, multi_catalog):
         pipeline_name = "unit_test_pipeline"
@@ -247,8 +247,8 @@ class TestMlflowEnvVarInjection:
 
         for node_job in az_pipeline.jobs.values():
             env = node_job.environment_variables
-            assert KEDRO_AZURE_ML_MLFLOW_ENABLED not in env
-            assert KEDRO_AZURE_ML_MLFLOW_RUN_NAME not in env
+            assert KEDRO_AZUREML_MLFLOW_ENABLED not in env
+            assert KEDRO_AZUREML_MLFLOW_RUN_NAME not in env
 
     def test_mlflow_node_name_unique_per_node(self, dummy_plugin_config, dummy_pipeline, multi_catalog):
         pipeline_name = "unit_test_pipeline"
@@ -265,6 +265,6 @@ class TestMlflowEnvVarInjection:
             az_pipeline = generator.generate()
 
         node_names = {
-            node_job.environment_variables[KEDRO_AZURE_ML_MLFLOW_NODE_NAME] for node_job in az_pipeline.jobs.values()
+            node_job.environment_variables[KEDRO_AZUREML_MLFLOW_NODE_NAME] for node_job in az_pipeline.jobs.values()
         }
         assert len(node_names) == len(az_pipeline.jobs), "Each node should have a unique MLFLOW_NODE_NAME"

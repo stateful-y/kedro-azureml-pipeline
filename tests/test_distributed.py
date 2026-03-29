@@ -6,11 +6,11 @@ import pytest
 from azure.ai.ml.entities import Job
 from kedro.pipeline import node, pipeline
 
-from kedro_azure_ml.constants import DISTRIBUTED_CONFIG_FIELD
-from kedro_azure_ml.distributed import distributed_job
-from kedro_azure_ml.distributed.config import Framework
-from kedro_azure_ml.distributed.utils import is_distributed_master_node
-from kedro_azure_ml.generator import AzureMLPipelineGenerator
+from kedro_azureml_pipeline.constants import DISTRIBUTED_CONFIG_FIELD
+from kedro_azureml_pipeline.distributed import distributed_job
+from kedro_azureml_pipeline.distributed.config import Framework
+from kedro_azureml_pipeline.distributed.utils import is_distributed_master_node
+from kedro_azureml_pipeline.generator import AzureMLPipelineGenerator
 from tests.utils import identity
 
 

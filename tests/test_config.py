@@ -4,7 +4,7 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from kedro_azure_ml.config import (
+from kedro_azureml_pipeline.config import (
     _CONFIG_TEMPLATE,
     ClusterConfig,
     ComputeConfig,

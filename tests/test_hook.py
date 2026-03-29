@@ -4,9 +4,9 @@ import pytest
 from kedro.io.core import Version
 from kedro.runner import SequentialRunner
 
-from kedro_azure_ml.datasets.asset_dataset import AzureMLAssetDataset
-from kedro_azure_ml.hooks import AzureMLLocalRunHook, azureml_local_run_hook
-from kedro_azure_ml.runner import AzurePipelinesRunner
+from kedro_azureml_pipeline.datasets.asset_dataset import AzureMLAssetDataset
+from kedro_azureml_pipeline.hooks import AzureMLLocalRunHook, azureml_local_run_hook
+from kedro_azureml_pipeline.runner import AzurePipelinesRunner
 
 
 class TestAzureMLLocalRunHook:
