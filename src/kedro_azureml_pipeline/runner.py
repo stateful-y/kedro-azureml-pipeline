@@ -28,9 +28,9 @@ class AzurePipelinesRunner(SequentialRunner):
 
     See Also
     --------
-    `kedro_azureml_pipeline.datasets.AzureMLPipelineDataset` : Dataset whose paths are rewired.
-    `kedro_azureml_pipeline.datasets.AzureMLAssetDataset` : Versioned asset dataset.
-    `kedro_azureml_pipeline.hooks.AzureMLLocalRunHook` : Hook that detects this runner.
+    [AzureMLPipelineDataset][kedro_azureml_pipeline.datasets.AzureMLPipelineDataset] : Dataset whose paths are rewired.
+    [AzureMLAssetDataset][kedro_azureml_pipeline.datasets.AzureMLAssetDataset] : Versioned asset dataset.
+    [AzureMLLocalRunHook][kedro_azureml_pipeline.hooks.AzureMLLocalRunHook] : Hook that detects this runner.
     """
 
     def __init__(
@@ -87,9 +87,9 @@ class AzurePipelinesRunner(SequentialRunner):
 
         # Restore Azure configs after copying
         for ds_name, azure_config in azure_configs.items():
-            if ds_name in updated_catalog.filter():
+            if ds_name in updated_catalog.filter():  # pragma: no branch
                 ds = updated_catalog[ds_name]
-                if isinstance(ds, AzureMLAssetDataset):
+                if isinstance(ds, AzureMLAssetDataset):  # pragma: no branch
                     ds.azure_config = azure_config
 
         catalog_set = set(updated_catalog.filter())
@@ -103,9 +103,11 @@ class AzurePipelinesRunner(SequentialRunner):
                         ds.root_dir = Path(azure_dataset_path).parent.as_posix()
                     else:
                         ds.root_dir = azure_dataset_path
+                    logger.debug("Rewired dataset '%s' root_dir to '%s'", ds_name, ds.root_dir)
                     updated_catalog[ds_name] = ds
             else:
                 updated_catalog[ds_name] = self.create_default_data_set(ds_name)
+                logger.debug("Created default pickle dataset for '%s'", ds_name)
 
         # Loop over remaining input datasets to add them to the catalog
         unsatisfied = pipeline.inputs() - set(updated_catalog.filter())
@@ -114,7 +116,7 @@ class AzurePipelinesRunner(SequentialRunner):
                 # Dataset is resolvable including as a factory dataset
                 updated_catalog[ds_name] = catalog[ds_name]
             else:
-                updated_catalog[ds_name] = self.create_default_data_set(ds_name)
+                updated_catalog[ds_name] = self.create_default_data_set(ds_name)  # pragma: no cover
 
         return super().run(
             pipeline=pipeline,

@@ -1,6 +1,6 @@
 # How to Run Distributed Training
 
-This guide shows how to mark Kedro nodes for distributed execution on Azure ML using the `@distributed_job` decorator.
+This guide shows how to mark Kedro nodes for distributed execution on Azure ML using the [`@distributed_job`][kedro_azureml_pipeline.distributed.distributed_job] decorator.
 
 ## Prerequisites
 
@@ -74,8 +74,23 @@ num_training_nodes: 4
 
 During local runs, `@distributed_job` has no effect and the function runs normally. During Azure ML runs, the pipeline generator wraps the step in a distributed job configuration. See the [architecture overview](../explanation/architecture.md) for details on pipeline compilation.
 
+!!! tip "Checking rank inside a node"
+
+    Use [`is_distributed_master_node()`][kedro_azureml_pipeline.distributed.is_distributed_master_node] to check whether the current process is rank 0. This is useful for logging or saving artifacts only from the master node:
+
+    ```python
+    from kedro_azureml_pipeline.distributed import is_distributed_master_node
+
+    if is_distributed_master_node():
+        mlflow.log_artifact("model.pkl")
+    ```
+
+!!! note
+
+    If your compute cluster has fewer nodes than `num_nodes`, Azure ML queues the job until enough nodes become available. The job will not fail immediately, but it may wait indefinitely if the cluster's maximum node count is lower than the requested count.
+
 ## See also
 
 - [Architecture overview](../explanation/architecture.md) for how the pipeline generator translates Kedro nodes to Azure ML steps
-- [`distributed_job` API](../reference/api.md) for the decorator parameter reference
-- [`Framework` API](../reference/api.md) for supported framework values
+- [`distributed_job`][kedro_azureml_pipeline.distributed.distributed_job] API for the decorator parameter reference
+- [`Framework`][kedro_azureml_pipeline.distributed.Framework] API for supported framework values

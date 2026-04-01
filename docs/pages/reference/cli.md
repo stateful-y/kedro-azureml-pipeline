@@ -25,7 +25,7 @@ No flags.
 kedro azureml compile -j JOB_NAME [options]
 ```
 
-Compiles named job(s) into Azure ML pipeline YAML definitions without submitting them.
+Compiles named job(s) into Azure ML pipeline YAML definitions without submitting them. See [Compile and inspect](../how-to/compile-and-inspect.md) for a walkthrough.
 
 | Flag | Description |
 |---|---|
@@ -82,7 +82,7 @@ Creates or updates persistent Azure ML schedules for named job(s). Every selecte
 
 ## `kedro azureml execute`
 
-Used internally by Azure ML pipeline steps to run individual Kedro nodes on compute. Not intended for direct use.
+Used internally by Azure ML pipeline steps to run individual Kedro nodes on compute. Not intended for direct use. You may see this command in Azure ML step logs when inspecting pipeline run output in Azure ML Studio.
 
 ---
 

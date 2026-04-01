@@ -11,7 +11,7 @@ from kedro_azureml_pipeline.constants import (
     KEDRO_AZUREML_MLFLOW_NODE_NAME,
     KEDRO_AZUREML_MLFLOW_RUN_NAME,
 )
-from kedro_azureml_pipeline.mlflow_hook import MlflowAzureMLHook
+from kedro_azureml_pipeline.hooks.mlflow import MlflowAzureMLHook
 
 MLFLOW_ENV_VARS = [
     KEDRO_AZUREML_MLFLOW_ENABLED,
@@ -42,6 +42,8 @@ def hook():
 
 
 class TestAfterContextCreated:
+    """``after_context_created`` hook env-var setup."""
+
     def test_noop_when_disabled(self, hook):
         """Hook does nothing when KEDRO_AZUREML_MLFLOW_ENABLED != '1'."""
         hook.after_context_created(context=MagicMock())
@@ -64,6 +66,8 @@ class TestAfterContextCreated:
 
 
 class TestBeforePipelineRun:
+    """``before_pipeline_run`` hook MLflow run lifecycle."""
+
     def test_noop_when_disabled(self, hook):
         hook.before_pipeline_run(
             run_params={"pipeline_name": "test"},
@@ -71,7 +75,7 @@ class TestBeforePipelineRun:
             catalog=MagicMock(),
         )
 
-    @patch("kedro_azureml_pipeline.mlflow_hook.mlflow", create=True)
+    @patch("kedro_azureml_pipeline.hooks.mlflow.mlflow", create=True)
     def test_noop_when_no_active_run(self, mock_mlflow, hook):
         os.environ[KEDRO_AZUREML_MLFLOW_ENABLED] = "1"
 
@@ -227,6 +231,8 @@ class TestBeforePipelineRun:
 
 
 class TestOnPipelineError:
+    """``on_pipeline_error`` hook MLflow failure tracking."""
+
     def test_noop_when_disabled(self, hook):
         hook.on_pipeline_error(
             error=RuntimeError("boom"),
@@ -286,3 +292,24 @@ class TestOnPipelineError:
 
         error_tag_call = [c for c in mock_mlflow.set_tag.call_args_list if c[0][0] == "kedro.error"][0]
         assert len(error_tag_call[0][1]) == 250
+
+    def test_noop_when_mlflow_not_installed(self, hook):
+        """When mlflow is not importable, ``on_pipeline_error`` is a no-op."""
+        os.environ[KEDRO_AZUREML_MLFLOW_ENABLED] = "1"
+
+        import builtins
+
+        real_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "mlflow":
+                raise ImportError("no mlflow")
+            return real_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=mock_import):
+            hook.on_pipeline_error(
+                error=RuntimeError("boom"),
+                run_params={},
+                pipeline=MagicMock(),
+                catalog=MagicMock(),
+            )

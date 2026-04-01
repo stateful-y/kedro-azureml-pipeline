@@ -8,21 +8,7 @@ This guide covers common errors and systematic debugging steps for Kedro AzureML
 
 **Cause**: Azure credentials are missing or expired.
 
-**Fix**:
-
-```bash
-az login
-```
-
-For CI/CD or automated environments, configure a service principal and set:
-
-```bash
-export AZURE_TENANT_ID="..."
-export AZURE_CLIENT_ID="..."
-export AZURE_CLIENT_SECRET="..."
-```
-
-Verify the service principal has the `Contributor` or `AzureML Data Scientist` role on the workspace.
+**Fix**: Run `az login` for local development, or set service principal environment variables for CI/CD. See [How to authenticate](authenticate.md) for the full credential setup guide.
 
 ---
 
@@ -54,7 +40,7 @@ Correct the `cluster_name` in the relevant `compute` entry in `azureml.yml`.
 az ml environment list --workspace-name <name> --resource-group <rg>
 ```
 
-Ensure the name includes a valid version tag, e.g. `my-env@latest` or `my-env:3`.
+Ensure the name includes a valid version tag, e.g. `my-env@latest` or `my-env:3`. See [Build a custom environment](build-custom-environment.md) for creating and registering environments.
 
 ---
 
@@ -72,7 +58,7 @@ Ensure the name includes a valid version tag, e.g. `my-env@latest` or `my-env:3`
 
 **Symptom**: Errors about a data asset version not existing or not being accessible.
 
-**Cause**: The `azureml_version` on an `AzureMLAssetDataset` entry does not exist, or the asset itself does not exist in the workspace.
+**Cause**: The `azureml_version` on an [`AzureMLAssetDataset`][kedro_azureml_pipeline.datasets.AzureMLAssetDataset] entry does not exist, or the asset itself does not exist in the workspace.
 
 **Fix**: Verify the asset exists:
 
@@ -80,7 +66,53 @@ Ensure the name includes a valid version tag, e.g. `my-env@latest` or `my-env:3`
 az ml data show --name <dataset_name> --workspace-name <name> --resource-group <rg>
 ```
 
-Remove the `azureml_version` field to use the latest version, or correct the version number.
+Remove the `azureml_version` field to use the latest version, or correct the version number. See the [Datasets reference](../reference/datasets.md) for the full parameter tables.
+
+---
+
+## Schedule not triggering
+
+**Symptom**: You created a schedule with `kedro azureml schedule`, but no runs appear in Azure ML Studio.
+
+**Cause**: The schedule definition, compute target, or environment may be invalid, causing Azure ML to skip the trigger silently.
+
+**Fix**:
+
+1. Verify the schedule exists in Azure ML Studio under **Assets > Schedules** (or **Manage > Schedules** depending on Studio version).
+2. Check that the compute cluster referenced by the job is running and has available nodes.
+3. Confirm the Azure ML environment still exists and has not been deleted or renamed.
+4. Use `kedro azureml schedule -j <job> --dry-run` to inspect the schedule definition locally.
+5. If using cron expressions, verify the expression and time zone are correct. A cron trigger in the past with no future occurrence will never fire.
+
+---
+
+## MLflow logging not appearing
+
+**Symptom**: Node functions call `mlflow.log_metric()` or `mlflow.log_param()`, but no metrics or parameters appear in Azure ML Studio after the run completes.
+
+**Cause**: The `kedro-mlflow` package or its hook may not be active during remote execution.
+
+**Fix**:
+
+1. Verify that `kedro-mlflow` is installed in your Azure ML environment (the Docker image or conda spec used by the compute).
+2. Check step logs in Azure ML Studio for import errors related to `mlflow` or `kedro_mlflow`.
+3. Compile the job with `kedro azureml compile -j <job>` and confirm that `KEDRO_AZUREML_MLFLOW_ENABLED: "1"` appears in the generated YAML environment variables.
+4. If you set `mlflow_tracking_uri` manually in `mlflow.yml`, remove it or set it to `null` so Azure ML's injected URI takes precedence.
+
+See also the [Use MLflow](use-mlflow.md) how-to guide.
+
+---
+
+## Azure SDK warnings
+
+**Symptom**: Import warnings from `azure.ai.ml` appear in your terminal output.
+
+**Note**: The plugin suppresses these warnings by default on import. If you see them, it usually means code is importing `azure.ai.ml` before `kedro_azureml_pipeline`. This is harmless but noisy. To suppress manually:
+
+```python
+import warnings
+warnings.filterwarnings("ignore", module="azure.ai.ml")
+```
 
 ---
 
@@ -131,4 +163,6 @@ Search [GitHub Issues](https://github.com/stateful-y/kedro-azureml-pipeline/issu
 ## See also
 
 - [Configuration reference](../reference/configuration.md) for all `azureml.yml` fields
+- [CLI reference](../reference/cli.md) for all available commands
+- [Compile and inspect](compile-and-inspect.md) for verifying pipeline YAML before submitting
 - [Architecture overview](../explanation/architecture.md) for how the plugin works internally

@@ -47,8 +47,8 @@ class MlflowAzureMLHook:
 
     See Also
     --------
-    `kedro_azureml_pipeline.generator.AzureMLPipelineGenerator` : Injects MLflow env vars.
-    `kedro_azureml_pipeline.hooks.AzureMLLocalRunHook` : Companion hook for dataset config.
+    [AzureMLPipelineGenerator][kedro_azureml_pipeline.generator.AzureMLPipelineGenerator] : Injects MLflow env vars.
+    [AzureMLLocalRunHook][kedro_azureml_pipeline.hooks.AzureMLLocalRunHook] : Companion hook for dataset config.
     """
 
     @hook_impl(tryfirst=True)

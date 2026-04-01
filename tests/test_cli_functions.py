@@ -6,7 +6,8 @@ from unittest.mock import MagicMock, patch
 import click
 import pytest
 
-from kedro_azureml_pipeline.cli_functions import (
+from kedro_azureml_pipeline.cli.functions import (
+    _read_mlflow_experiment_name,
     default_job_callback,
     dynamic_import_job_schedule_func_from_str,
     parse_extra_env_params,
@@ -168,3 +169,29 @@ class TestDefaultJobCallback:
         job.studio_url = "https://ml.azure.com/runs/123"
         default_job_callback(job)
         assert "https://ml.azure.com/runs/123" in capsys.readouterr().out
+
+
+class TestReadMlflowExperimentName:
+    """``_read_mlflow_experiment_name`` reads from mlflow.yml via the config loader."""
+
+    def test_returns_name_when_configured(self):
+        mgr = MagicMock()
+        mgr.context.config_loader.__getitem__ = MagicMock(
+            return_value={"tracking": {"experiment": {"name": "my-experiment"}}}
+        )
+        assert _read_mlflow_experiment_name(mgr) == "my-experiment"
+
+    def test_returns_none_when_name_missing(self):
+        mgr = MagicMock()
+        mgr.context.config_loader.__getitem__ = MagicMock(return_value={"tracking": {}})
+        assert _read_mlflow_experiment_name(mgr) is None
+
+    def test_returns_none_on_key_error(self):
+        mgr = MagicMock()
+        mgr.context.config_loader.__getitem__ = MagicMock(side_effect=KeyError("mlflow"))
+        assert _read_mlflow_experiment_name(mgr) is None
+
+    def test_returns_none_on_type_error(self):
+        mgr = MagicMock()
+        mgr.context.config_loader.__getitem__ = MagicMock(side_effect=TypeError)
+        assert _read_mlflow_experiment_name(mgr) is None

@@ -88,6 +88,74 @@ def _get_module_members(py_file):
     return {"classes": classes, "functions": functions}
 
 
+def _get_subpackage_members(pkg_dir, module_name):
+    """Discover public members from a module or sub-package.
+
+    For single-file modules, reads that file.  For sub-packages, scans
+    every ``.py`` file in the directory but only includes names that are
+    re-exported from `__init__.py` (via imports or ``__all__``).
+    """
+    mod_file = pkg_dir / f"{module_name}.py"
+    if mod_file.exists():
+        return _get_module_members(mod_file)
+
+    mod_dir = pkg_dir / module_name
+    if not mod_dir.is_dir():
+        return {"classes": [], "functions": []}
+
+    # Determine which names __init__.py re-exports
+    init_file = mod_dir / "__init__.py"
+    exported_names = _get_exported_names(init_file) if init_file.exists() else None
+
+    members = {"classes": [], "functions": []}
+    seen = set()
+    for py_file in sorted(mod_dir.glob("*.py")):
+        file_members = _get_module_members(py_file)
+        for cls in file_members["classes"]:
+            if cls["name"] not in seen and (exported_names is None or cls["name"] in exported_names):
+                members["classes"].append(cls)
+                seen.add(cls["name"])
+        for func in file_members["functions"]:
+            if func["name"] not in seen and (exported_names is None or func["name"] in exported_names):
+                members["functions"].append(func)
+                seen.add(func["name"])
+    return members
+
+
+def _get_exported_names(init_file):
+    """Return the set of names re-exported from an __init__.py.
+
+    Checks ``__all__`` first; if absent, collects names from
+    ``from .x import y`` statements.
+    """
+    try:
+        source = init_file.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+    except (SyntaxError, UnicodeDecodeError):
+        return None
+
+    # Check for __all__
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if (
+                    isinstance(target, ast.Name)
+                    and target.id == "__all__"
+                    and isinstance(node.value, ast.List | ast.Tuple)
+                ):
+                    return {elt.value for elt in node.value.elts if isinstance(elt, ast.Constant)}
+
+    # Fall back to collecting imported names
+    names = set()
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                name = alias.asname if alias.asname else alias.name
+                if not name.startswith("_"):
+                    names.add(name)
+    return names
+
+
 def _build_members_tables(package_name, module_name, members):
     """Build markdown tables linking to generated per-class/function pages.
 
@@ -153,6 +221,10 @@ def _generate_api_pages(project_root):
     for old in generated_dir.glob("*.md"):
         old.unlink()
 
+    # Clean stale overview pages
+    for old in api_dir.glob("*.md"):
+        old.unlink()
+
     pkg_dir = project_root / "src" / "kedro_azureml_pipeline"
     modules = _get_submodules(project_root)
 
@@ -172,12 +244,7 @@ def _generate_api_pages(project_root):
 
     member_count = 0
     for mod in modules:
-        # Determine the source file for member discovery
-        mod_file = pkg_dir / f"{mod['module_name']}.py"
-        if not mod_file.exists():
-            mod_file = pkg_dir / mod["module_name"] / "__init__.py"
-
-        members = _get_module_members(mod_file) if mod_file.exists() else {"classes": [], "functions": []}
+        members = _get_subpackage_members(pkg_dir, mod["module_name"])
 
         # Generate submodule overview page with tables
         members_tables = _build_members_tables(
@@ -225,13 +292,7 @@ def _build_api_table_html(project_root):
 
     rows = []
     for mod in modules:
-        mod_file = pkg_dir / f"{mod['module_name']}.py"
-        if not mod_file.exists():
-            mod_file = pkg_dir / mod["module_name"] / "__init__.py"
-        if not mod_file.exists():
-            continue
-
-        members = _get_module_members(mod_file)
+        members = _get_subpackage_members(pkg_dir, mod["module_name"])
         module_label = f"kedro_azureml_pipeline.{mod['module_name']}"
         module_href = f"../../api/{mod['module_name']}/"
 
@@ -307,11 +368,6 @@ def _build_api_table_html(project_root):
     )
 
 
-# ---------------------------------------------------------------------------
-# API sidebar module TOC
-# ---------------------------------------------------------------------------
-
-
 def _build_module_toc(config, current_src_path=None):
     """Build the module TOC list used by the api-submodule sidebar template.
 
@@ -372,10 +428,6 @@ def _build_module_toc(config, current_src_path=None):
 
     return module_toc
 
-
-# ---------------------------------------------------------------------------
-# API page content post-processing
-# ---------------------------------------------------------------------------
 
 _GIT_REF_CACHE = None
 

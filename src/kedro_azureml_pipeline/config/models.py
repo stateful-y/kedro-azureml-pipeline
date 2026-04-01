@@ -3,7 +3,7 @@
 from typing import Any
 
 import yaml
-from pydantic import BaseModel, RootModel, model_validator
+from pydantic import BaseModel, ConfigDict, Field, RootModel, model_validator
 
 
 class WorkspaceConfig(BaseModel):
@@ -20,13 +20,15 @@ class WorkspaceConfig(BaseModel):
 
     See Also
     --------
-    `kedro_azureml_pipeline.config.WorkspacesConfig` : Named workspace registry.
-    `kedro_azureml_pipeline.config.KedroAzureMLConfig` : Top-level plugin configuration.
+    [WorkspacesConfig][kedro_azureml_pipeline.config.WorkspacesConfig] : Named workspace registry.
+    [KedroAzureMLConfig][kedro_azureml_pipeline.config.KedroAzureMLConfig] : Top-level plugin configuration.
     """
 
-    subscription_id: str
-    resource_group: str
-    name: str
+    model_config = ConfigDict(extra="forbid")
+
+    subscription_id: str = Field(description="Azure subscription ID.")
+    resource_group: str = Field(description="Azure resource group name.")
+    name: str = Field(description="Azure ML workspace name.")
 
 
 class WorkspacesConfig(RootModel[dict[str, WorkspaceConfig]]):
@@ -37,8 +39,8 @@ class WorkspacesConfig(RootModel[dict[str, WorkspaceConfig]]):
 
     See Also
     --------
-    `kedro_azureml_pipeline.config.WorkspaceConfig` : Single workspace identity.
-    `kedro_azureml_pipeline.config.KedroAzureMLConfig` : Top-level plugin configuration.
+    [WorkspaceConfig][kedro_azureml_pipeline.config.WorkspaceConfig] : Single workspace identity.
+    [KedroAzureMLConfig][kedro_azureml_pipeline.config.KedroAzureMLConfig] : Top-level plugin configuration.
     """
 
     @model_validator(mode="after")
@@ -95,10 +97,12 @@ class ClusterConfig(BaseModel):
 
     See Also
     --------
-    `kedro_azureml_pipeline.config.ComputeConfig` : Named compute cluster registry.
+    [ComputeConfig][kedro_azureml_pipeline.config.ComputeConfig] : Named compute cluster registry.
     """
 
-    cluster_name: str
+    model_config = ConfigDict(extra="forbid")
+
+    cluster_name: str = Field(description="Name of the Azure ML compute cluster.")
 
 
 class ComputeConfig(RootModel[dict[str, ClusterConfig]]):
@@ -109,8 +113,8 @@ class ComputeConfig(RootModel[dict[str, ClusterConfig]]):
 
     See Also
     --------
-    `kedro_azureml_pipeline.config.ClusterConfig` : Single cluster entry.
-    `kedro_azureml_pipeline.generator.AzureMLPipelineGenerator` : Uses compute config for node routing.
+    [ClusterConfig][kedro_azureml_pipeline.config.ClusterConfig] : Single cluster entry.
+    [AzureMLPipelineGenerator][kedro_azureml_pipeline.generator.AzureMLPipelineGenerator] : Uses compute config for node routing.
     """
 
     @model_validator(mode="after")
@@ -165,13 +169,17 @@ class ExecutionConfig(BaseModel):
 
     See Also
     --------
-    `kedro_azureml_pipeline.config.KedroAzureMLConfig` : Top-level plugin configuration.
-    `kedro_azureml_pipeline.generator.AzureMLPipelineGenerator` : Consumes execution config.
+    [KedroAzureMLConfig][kedro_azureml_pipeline.config.KedroAzureMLConfig] : Top-level plugin configuration.
+    [AzureMLPipelineGenerator][kedro_azureml_pipeline.generator.AzureMLPipelineGenerator] : Consumes execution config.
     """
 
-    environment: str | None = None
-    code_directory: str | None = None
-    working_directory: str | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    environment: str | None = Field(default=None, description="Azure ML environment name (e.g. 'my-env@latest').")
+    code_directory: str | None = Field(
+        default=None, description="Local directory to upload as a code snapshot, or None to disable code upload."
+    )
+    working_directory: str | None = Field(default=None, description="Working directory inside the compute container.")
 
 
 class CronScheduleConfig(BaseModel):
@@ -189,10 +197,12 @@ class CronScheduleConfig(BaseModel):
         IANA time zone (default ``"UTC"``).
     """
 
-    expression: str
-    start_time: str | None = None
-    end_time: str | None = None
-    time_zone: str = "UTC"
+    model_config = ConfigDict(extra="forbid")
+
+    expression: str = Field(description="Cron expression (e.g. '0 8 * * 1-5').")
+    start_time: str | None = Field(default=None, description="ISO 8601 start time.")
+    end_time: str | None = Field(default=None, description="ISO 8601 end time.")
+    time_zone: str = Field(default="UTC", description="IANA time zone.")
 
 
 class RecurrencePatternConfig(BaseModel):
@@ -208,9 +218,13 @@ class RecurrencePatternConfig(BaseModel):
         Days of the week to trigger (e.g. ``["Monday", "Friday"]``).
     """
 
-    hours: list[int] | None = None
-    minutes: list[int] | None = None
-    week_days: list[str] | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    hours: list[int] | None = Field(default=None, description="Hours of the day to trigger.")
+    minutes: list[int] | None = Field(default=None, description="Minutes of the hour to trigger.")
+    week_days: list[str] | None = Field(
+        default=None, description="Days of the week to trigger (e.g. ['Monday', 'Friday'])."
+    )
 
 
 class RecurrenceScheduleConfig(BaseModel):
@@ -232,12 +246,14 @@ class RecurrenceScheduleConfig(BaseModel):
         IANA time zone (default ``"UTC"``).
     """
 
-    frequency: str
-    interval: int
-    schedule: RecurrencePatternConfig | None = None
-    start_time: str | None = None
-    end_time: str | None = None
-    time_zone: str = "UTC"
+    model_config = ConfigDict(extra="forbid")
+
+    frequency: str = Field(description="Recurrence frequency (e.g. 'day', 'week').")
+    interval: int = Field(description="Number of frequency units between runs.")
+    schedule: RecurrencePatternConfig | None = Field(default=None, description="Optional detailed recurrence pattern.")
+    start_time: str | None = Field(default=None, description="ISO 8601 start time.")
+    end_time: str | None = Field(default=None, description="ISO 8601 end time.")
+    time_zone: str = Field(default="UTC", description="IANA time zone.")
 
 
 class ScheduleConfig(BaseModel):
@@ -252,13 +268,15 @@ class ScheduleConfig(BaseModel):
 
     See Also
     --------
-    `kedro_azureml_pipeline.config.CronScheduleConfig` : Cron trigger details.
-    `kedro_azureml_pipeline.config.RecurrenceScheduleConfig` : Recurrence trigger details.
-    `kedro_azureml_pipeline.scheduler.build_trigger` : Converts this config to Azure ML trigger.
+    [CronScheduleConfig][kedro_azureml_pipeline.config.CronScheduleConfig] : Cron trigger details.
+    [RecurrenceScheduleConfig][kedro_azureml_pipeline.config.RecurrenceScheduleConfig] : Recurrence trigger details.
+    [build_trigger][kedro_azureml_pipeline.scheduler.build_trigger] : Converts this config to Azure ML trigger.
     """
 
-    cron: CronScheduleConfig | None = None
-    recurrence: RecurrenceScheduleConfig | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    cron: CronScheduleConfig | None = Field(default=None, description="Cron-based trigger.")
+    recurrence: RecurrenceScheduleConfig | None = Field(default=None, description="Recurrence-based trigger.")
 
     @model_validator(mode="after")
     def _validate_exactly_one_trigger(self) -> "ScheduleConfig":
@@ -305,18 +323,20 @@ class PipelineFilterOptions(BaseModel):
 
     See Also
     --------
-    `kedro_azureml_pipeline.config.JobConfig` : Uses filter options per job.
-    `kedro_azureml_pipeline.generator.AzureMLPipelineGenerator` : Applies filters during generation.
+    [JobConfig][kedro_azureml_pipeline.config.JobConfig] : Uses filter options per job.
+    [AzureMLPipelineGenerator][kedro_azureml_pipeline.generator.AzureMLPipelineGenerator] : Applies filters during generation.
     """
 
-    pipeline_name: str = "__default__"
-    from_nodes: list[str] | None = None
-    to_nodes: list[str] | None = None
-    node_names: list[str] | None = None
-    from_inputs: list[str] | None = None
-    to_outputs: list[str] | None = None
-    node_namespaces: list[str] | None = None
-    tags: list[str] | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    pipeline_name: str = Field(default="__default__", description="Kedro pipeline name.")
+    from_nodes: list[str] | None = Field(default=None, description="Start from these nodes.")
+    to_nodes: list[str] | None = Field(default=None, description="Run up to these nodes.")
+    node_names: list[str] | None = Field(default=None, description="Run only these specific nodes.")
+    from_inputs: list[str] | None = Field(default=None, description="Start from nodes that produce these datasets.")
+    to_outputs: list[str] | None = Field(default=None, description="Run up to nodes that produce these datasets.")
+    node_namespaces: list[str] | None = Field(default=None, description="Filter by namespace.")
+    tags: list[str] | None = Field(default=None, description="Filter by tag.")
 
     def to_filter_kwargs(self) -> dict[str, Any]:
         """Return non-None filter kwargs suitable for ``Pipeline.filter()``.
@@ -358,20 +378,39 @@ class JobConfig(BaseModel):
     description : str or None
         Human-readable job description.
 
+    Examples
+    --------
+    ```yaml
+    jobs:
+      __default__:
+        pipeline:
+          pipeline_name: __default__
+        experiment_name: "my-experiment"
+      nightly:
+        pipeline:
+          pipeline_name: data_processing
+        schedule:
+          cron:
+            expression: "0 2 * * *"
+    ```
+
     See Also
     --------
-    `kedro_azureml_pipeline.config.PipelineFilterOptions` : Pipeline node filtering.
-    `kedro_azureml_pipeline.config.ScheduleConfig` : Schedule trigger specification.
-    `kedro_azureml_pipeline.cli_functions.submit_scheduled_jobs` : Submits configured jobs.
+    [PipelineFilterOptions][kedro_azureml_pipeline.config.PipelineFilterOptions] : Pipeline node filtering.
+    [ScheduleConfig][kedro_azureml_pipeline.config.ScheduleConfig] : Schedule trigger specification.
     """
 
-    pipeline: PipelineFilterOptions
-    workspace: str | None = None
-    experiment_name: str | None = None
-    display_name: str | None = None
-    compute: str | None = None
-    schedule: ScheduleConfig | str | None = None
-    description: str | None = None
+    model_config = ConfigDict(extra="forbid")
+
+    pipeline: PipelineFilterOptions = Field(description="Pipeline selection and filter options.")
+    workspace: str | None = Field(default=None, description="Named workspace to use (falls back to '__default__').")
+    experiment_name: str | None = Field(default=None, description="Azure ML experiment name.")
+    display_name: str | None = Field(default=None, description="Display name shown in the Azure ML portal.")
+    compute: str | None = Field(default=None, description="Named compute entry to use.")
+    schedule: ScheduleConfig | str | None = Field(
+        default=None, description="Inline schedule, named schedule reference, or None for ad-hoc."
+    )
+    description: str | None = Field(default=None, description="Human-readable job description.")
 
 
 class KedroAzureMLConfig(BaseModel):
@@ -390,19 +429,48 @@ class KedroAzureMLConfig(BaseModel):
     jobs : dict of str to JobConfig
         Named job definitions.
 
+    Examples
+    --------
+    ```yaml
+    # conf/base/azureml.yml
+    workspace:
+      __default__:
+        subscription_id: "abc-123"
+        resource_group: "my-rg"
+        name: "my-workspace"
+
+    compute:
+      __default__:
+        cluster_name: "cpu-cluster"
+
+    execution:
+      environment: "my-env@latest"
+
+    jobs:
+      __default__:
+        pipeline:
+          pipeline_name: __default__
+    ```
+
     See Also
     --------
-    `kedro_azureml_pipeline.config.WorkspacesConfig` : Workspace definitions.
-    `kedro_azureml_pipeline.config.ComputeConfig` : Compute cluster definitions.
-    `kedro_azureml_pipeline.config.JobConfig` : Individual job configurations.
-    `kedro_azureml_pipeline.manager.KedroContextManager` : Loads and validates this config.
+    [WorkspacesConfig][kedro_azureml_pipeline.config.WorkspacesConfig] : Workspace definitions.
+    [ComputeConfig][kedro_azureml_pipeline.config.ComputeConfig] : Compute cluster definitions.
+    [JobConfig][kedro_azureml_pipeline.config.JobConfig] : Individual job configurations.
+    [KedroContextManager][kedro_azureml_pipeline.manager.KedroContextManager] : Loads and validates this config.
     """
 
-    workspace: WorkspacesConfig
-    compute: ComputeConfig
-    execution: ExecutionConfig = ExecutionConfig()
-    schedules: dict[str, ScheduleConfig] = {}
-    jobs: dict[str, JobConfig] = {}
+    model_config = ConfigDict(extra="forbid")
+
+    workspace: WorkspacesConfig = Field(description="Named Azure ML workspace definitions.")
+    compute: ComputeConfig = Field(description="Named compute cluster definitions.")
+    execution: ExecutionConfig = Field(
+        default_factory=ExecutionConfig, description="Code packaging and execution settings."
+    )
+    schedules: dict[str, ScheduleConfig] = Field(
+        default_factory=dict, description="Reusable named schedule definitions."
+    )
+    jobs: dict[str, JobConfig] = Field(default_factory=dict, description="Named job definitions.")
 
 
 CONFIG_TEMPLATE_YAML = """

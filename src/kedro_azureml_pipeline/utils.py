@@ -18,8 +18,7 @@ class CliContext:
 
     See Also
     --------
-    `kedro_azureml_pipeline.manager.KedroContextManager` : Uses env from this context.
-    `kedro_azureml_pipeline.cli_functions.submit_scheduled_jobs` : Receives this as ``ctx``.
+    [KedroContextManager][kedro_azureml_pipeline.manager.KedroContextManager] : Uses env from this context.
     """
 
     env: str
@@ -41,6 +40,11 @@ def update_dict(dictionary, *kv_pairs):
     -------
     dict
         Updated deep copy.
+
+    See Also
+    --------
+    [CliContext][kedro_azureml_pipeline.utils.CliContext] : Carries env/metadata through CLI.
+    [KedroContextManager][kedro_azureml_pipeline.manager.KedroContextManager] : Manages Kedro session and config.
     """
     updated = deepcopy(dictionary)
 

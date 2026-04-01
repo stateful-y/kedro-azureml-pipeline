@@ -56,9 +56,9 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
 
     See Also
     --------
-    `kedro_azureml_pipeline.datasets.AzureMLPipelineDataset` : Base class for pipeline data passing.
-    `kedro_azureml_pipeline.hooks.AzureMLLocalRunHook` : Configures this dataset for local runs.
-    `kedro_azureml_pipeline.runner.AzurePipelinesRunner` : Rewires paths during remote runs.
+    [AzureMLPipelineDataset][kedro_azureml_pipeline.datasets.AzureMLPipelineDataset] : Base class for pipeline data passing.
+    [AzureMLLocalRunHook][kedro_azureml_pipeline.hooks.AzureMLLocalRunHook] : Configures this dataset for local runs.
+    [AzurePipelinesRunner][kedro_azureml_pipeline.runner.AzurePipelinesRunner] : Rewires paths during remote runs.
     """
 
     versioned = True
@@ -86,6 +86,10 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
         self._azureml_version = azureml_version
         # 1 entry for load version, 1 for save version
         self._version_cache = Cache(maxsize=2)  # type: Cache
+        # Execution-context flags, toggled by ``as_local_intermediate`` and
+        # ``as_remote``.  ``_download`` controls whether ``_load`` fetches
+        # the asset from Azure ML; ``_local_run`` controls whether path
+        # resolution includes the dataset name and version prefix.
         self._download = True
         self._local_run = True
         self._azureml_config = None
@@ -98,7 +102,7 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
 
         # Versioning is handled by Azure ML Data Asset versions, not Kedro's
         # built-in versioning mechanism.
-        if VERSION_KEY in self._dataset_config:
+        if VERSION_KEY in self._dataset_config:  # pragma: no cover – parent __init__ raises first
             raise DatasetError(
                 f"'{self.__class__.__name__}' does not support versioning of the "
                 f"underlying dataset. Please remove '{VERSIONED_FLAG_KEY}' flag from "
@@ -197,7 +201,7 @@ class AzureMLAssetDataset(AzureMLPipelineDataset, AbstractVersionedDataset):
             raise DatasetNotFoundError(f"Did not find Azure ML Data Asset for {self}") from exc
 
     @cachedmethod(cache=attrgetter("_version_cache"), key=partial(hashkey, "load"))
-    def _fetch_latest_load_version(self) -> str:
+    def _fetch_latest_load_version(self) -> str:  # pragma: no cover – called by Kedro internals
         """Return the latest load version, cached after first call.
 
         Returns

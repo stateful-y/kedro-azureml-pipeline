@@ -81,6 +81,19 @@ class TestAzureMLLocalRunHook:
         hook.after_context_created(context_mock)
         assert "azureml" in config_patterns
 
+    def test_preserves_existing_azureml_pattern(self, mock_azureml_config):
+        """If ``azureml`` pattern already exists the hook does not overwrite it."""
+        hook = AzureMLLocalRunHook()
+        existing_patterns = {"azureml": ["custom*"]}
+        context_mock = Mock(
+            config_loader=MagicMock(
+                __getitem__=Mock(return_value={"workspace": {"__default__": mock_azureml_config.to_dict()}}),
+                config_patterns=existing_patterns,
+            )
+        )
+        hook.after_context_created(context_mock)
+        assert existing_patterns["azureml"] == ["custom*"]
+
     def test_skips_non_asset_datasets_in_catalog(self, mock_azureml_config):
         """Non-AzureMLAssetDataset entries in the catalog are left untouched."""
         from kedro.io import DataCatalog, MemoryDataset

@@ -1,10 +1,13 @@
 """Tests for the Azure ML pipeline client."""
 
+import os
 from unittest.mock import MagicMock, patch
 
 import pytest
+from azure.core.exceptions import HttpResponseError
+from azure.identity import CredentialUnavailableError
 
-from kedro_azureml_pipeline.client import AzureMLPipelinesClient, _get_azureml_client
+from kedro_azureml_pipeline.client import AzureMLPipelinesClient, _get_azureml_client, get_azureml_credentials
 from kedro_azureml_pipeline.config import ClusterConfig, ComputeConfig, WorkspaceConfig
 
 
@@ -139,10 +142,98 @@ class TestAzureMLPipelinesClient:
             mock_ml_client.compute.get.return_value = MagicMock(
                 name="cpu-cluster", size="Standard_DS3_v2", min_instances=0, max_instances=4
             )
-            mock_ml_client.jobs.stream.side_effect = RuntimeError("pipeline failed")
+            mock_ml_client.jobs.stream.side_effect = HttpResponseError("pipeline failed")
             mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_ml_client)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             result = client.run(workspace_config, compute_config, wait_for_completion=True)
 
             assert result is False
+
+    def test_run_without_waiting_returns_true(self, workspace_config, compute_config, mock_pipeline_job):
+        """Explicit ``wait_for_completion=False`` returns True without streaming."""
+        client = AzureMLPipelinesClient(mock_pipeline_job)
+
+        with patch("kedro_azureml_pipeline.client._get_azureml_client") as mock_ctx:
+            mock_ml_client = MagicMock()
+            mock_ml_client.compute.get.return_value = MagicMock(
+                name="cpu-cluster", size="Standard_DS3_v2", min_instances=0, max_instances=4
+            )
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_ml_client)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = client.run(
+                workspace_config,
+                compute_config,
+                wait_for_completion=False,
+                experiment_name="my-experiment",
+            )
+
+            assert result is True
+            mock_ml_client.jobs.stream.assert_not_called()
+
+    def test_run_raises_on_missing_cluster(self, workspace_config, compute_config, mock_pipeline_job):
+        """A missing compute cluster raises ``ValueError``."""
+        client = AzureMLPipelinesClient(mock_pipeline_job)
+
+        with patch("kedro_azureml_pipeline.client._get_azureml_client") as mock_ctx:
+            mock_ml_client = MagicMock()
+            mock_ml_client.compute.get.return_value = None
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_ml_client)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            with pytest.raises(ValueError, match="does not exist"):
+                client.run(workspace_config, compute_config)
+
+
+class TestGetAzureMLCredentials:
+    """Credential resolution strategy."""
+
+    def test_returns_default_credential_when_valid(self):
+        with (
+            patch("kedro_azureml_pipeline.client.DefaultAzureCredential") as mock_default,
+            patch("kedro_azureml_pipeline.client.InteractiveBrowserCredential") as mock_interactive,
+        ):
+            mock_default.return_value = MagicMock()
+            result = get_azureml_credentials()
+
+            mock_default.assert_called_once()
+            mock_interactive.assert_not_called()
+            assert result is mock_default.return_value
+
+    def test_falls_back_to_interactive_on_failure(self):
+        with (
+            patch("kedro_azureml_pipeline.client.DefaultAzureCredential") as mock_default,
+            patch("kedro_azureml_pipeline.client.InteractiveBrowserCredential") as mock_interactive,
+        ):
+            mock_default.return_value.get_token.side_effect = CredentialUnavailableError(message="no token")
+            mock_interactive.return_value = MagicMock()
+
+            result = get_azureml_credentials()
+
+            mock_interactive.assert_called_once()
+            assert result is mock_interactive.return_value
+
+    def test_excludes_managed_identity_on_azureml_compute(self):
+        with (
+            patch.dict(os.environ, {"MSI_ENDPOINT": "http://fake"}),
+            patch("kedro_azureml_pipeline.client.DefaultAzureCredential") as mock_default,
+            patch("kedro_azureml_pipeline.client.InteractiveBrowserCredential"),
+        ):
+            mock_default.return_value = MagicMock()
+            get_azureml_credentials()
+
+            mock_default.assert_called_once_with(exclude_managed_identity_credential=True)
+
+    def test_does_not_exclude_managed_identity_outside_azureml(self):
+        env = os.environ.copy()
+        env.pop("MSI_ENDPOINT", None)
+        with (
+            patch.dict(os.environ, env, clear=True),
+            patch("kedro_azureml_pipeline.client.DefaultAzureCredential") as mock_default,
+            patch("kedro_azureml_pipeline.client.InteractiveBrowserCredential"),
+        ):
+            mock_default.return_value = MagicMock()
+            get_azureml_credentials()
+
+            mock_default.assert_called_once_with(exclude_managed_identity_credential=False)

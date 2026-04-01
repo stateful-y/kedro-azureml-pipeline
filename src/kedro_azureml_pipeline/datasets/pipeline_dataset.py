@@ -42,8 +42,8 @@ class AzureMLPipelineDataset(AbstractDataset):
 
     See Also
     --------
-    `kedro_azureml_pipeline.datasets.AzureMLAssetDataset` : Versioned Data Asset extension.
-    `kedro_azureml_pipeline.runner.AzurePipelinesRunner` : Rewires dataset paths at runtime.
+    [AzureMLAssetDataset][kedro_azureml_pipeline.datasets.AzureMLAssetDataset] : Versioned Data Asset extension.
+    [AzurePipelinesRunner][kedro_azureml_pipeline.runner.AzurePipelinesRunner] : Rewires dataset paths at runtime.
     """
 
     def __init__(

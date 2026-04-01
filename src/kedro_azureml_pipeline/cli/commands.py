@@ -11,7 +11,7 @@ from kedro.framework.cli.project import LOAD_VERSION_HELP
 from kedro.framework.cli.utils import _split_load_versions
 from kedro.framework.startup import ProjectMetadata
 
-from kedro_azureml_pipeline.cli_functions import (
+from kedro_azureml_pipeline.cli.functions import (
     compile_job_pipelines,
     dynamic_import_job_schedule_func_from_str,
     parse_extra_env_params,

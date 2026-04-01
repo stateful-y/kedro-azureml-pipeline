@@ -12,9 +12,9 @@ class AzureMLLocalRunHook:
 
     See Also
     --------
-    `kedro_azureml_pipeline.datasets.AzureMLAssetDataset` : Dataset managed by this hook.
-    `kedro_azureml_pipeline.runner.AzurePipelinesRunner` : Remote runner detected by the hook.
-    `kedro_azureml_pipeline.config.WorkspacesConfig` : Workspace config injected into datasets.
+    [AzureMLAssetDataset][kedro_azureml_pipeline.datasets.AzureMLAssetDataset] : Dataset managed by this hook.
+    [AzurePipelinesRunner][kedro_azureml_pipeline.runner.AzurePipelinesRunner] : Remote runner detected by the hook.
+    [WorkspacesConfig][kedro_azureml_pipeline.config.WorkspacesConfig] : Workspace config injected into datasets.
     """
 
     @hook_impl

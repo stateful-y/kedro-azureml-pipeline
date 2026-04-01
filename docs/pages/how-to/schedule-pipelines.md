@@ -4,9 +4,10 @@ This guide shows how to configure recurring schedules for Kedro AzureML Pipeline
 
 ## Prerequisites
 
-- A job defined under `jobs:` in `conf/base/azureml.yml`
+- A job defined under `jobs:` in `conf/base/azureml.yml` (see [Getting Started](../tutorials/getting-started.md))
 - The target Azure ML workspace and compute configured
 - Azure credentials available (`az login` or service principal)
+- Familiarity with [cron expressions](https://en.wikipedia.org/wiki/Cron#Cron_expression) (for cron schedules)
 
 ## Attach a cron schedule to a job
 
@@ -103,3 +104,5 @@ The `-w` flag overrides the workspace for the current invocation. It does not mo
 
 - [Configuration reference](../reference/configuration.md#jobs) for the full `schedule` field documentation
 - [CLI reference](../reference/cli.md#kedro-azureml-schedule) for all `kedro azureml schedule` flags
+- [Troubleshoot](troubleshoot.md#schedule-not-triggering) if your schedule is not triggering
+- [Deploy from CI/CD](deploy-from-cicd.md) for automating schedule creation in pipelines

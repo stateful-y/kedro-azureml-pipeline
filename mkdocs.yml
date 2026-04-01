@@ -94,8 +94,10 @@ extra_css:
   - stylesheets/theme.css
   - https://cdn.datatables.net/2.2.2/css/dataTables.dataTables.min.css
 
+
 exclude_docs: |
   api-submodule.html
+
 
 not_in_nav: |
   assets/README.md
@@ -135,21 +137,34 @@ plugins:
 nav:
   - Home: index.md
   - Tutorials:
+    - pages/tutorials/index.md
     - Getting Started: pages/tutorials/getting-started.md
+    - Migrate an Existing Project: pages/tutorials/migrate-existing-project.md
   - How-to Guides:
+    - pages/how-to/index.md
     - Schedule Pipelines: pages/how-to/schedule-pipelines.md
     - Use Data Assets: pages/how-to/use-data-assets.md
     - Run Distributed Training: pages/how-to/run-distributed-training.md
     - Use MLflow: pages/how-to/use-mlflow.md
     - Configure Multiple Workspaces: pages/how-to/configure-multiple-workspaces.md
+    - Build a Custom Environment: pages/how-to/build-custom-environment.md
+    - Deploy from CI/CD: pages/how-to/deploy-from-cicd.md
+    - Compile and Inspect: pages/how-to/compile-and-inspect.md
+    - Authenticate: pages/how-to/authenticate.md
     - Troubleshoot: pages/how-to/troubleshoot.md
     - Contribute: pages/how-to/contribute.md
   - Reference:
+    - pages/reference/index.md
     - Configuration: pages/reference/configuration.md
     - CLI: pages/reference/cli.md
+    - Datasets: pages/reference/datasets.md
     - API: pages/reference/api.md
   - Explanation:
+    - pages/explanation/index.md
+    - Concepts: pages/explanation/concepts.md
     - Architecture: pages/explanation/architecture.md
+    - Data Flow Between Steps: pages/explanation/data-flow.md
+    - Hook Lifecycle: pages/explanation/hook-lifecycle.md
 
 extra:
   social:

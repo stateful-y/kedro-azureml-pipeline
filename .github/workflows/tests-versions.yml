@@ -1,0 +1,59 @@
+name: Run tests for different versions of Kedro and azure-ai-ml
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    tags-ignore: ["**"]
+  pull_request:
+    branches: ["main"]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  versions:
+    name: Test ${{ matrix.python-version }} | ${{ matrix.kedro_spec }} | ${{ matrix.azureml_spec }} | mlflow=${{ matrix.with_mlflow }} on ${{ matrix.os }}
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+        os: [ubuntu-latest]
+        kedro_spec: ["kedro>=1.0,<2.0"]
+        azureml_spec: ["azure-ai-ml>=1.2,<1.20", "azure-ai-ml>=1.20"]
+        with_mlflow: ["False", "True"]
+        exclude:
+          # azure-ai-ml<1.20 uses typing internals incompatible with Python 3.13
+          - python-version: "3.13"
+            azureml_spec: "azure-ai-ml>=1.2,<1.20"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install nox
+        run: uv tool install --python-preference only-managed nox
+
+      - name: Install Python ${{ matrix.python-version }}
+        run: uv python install --python-preference only-managed ${{ matrix.python-version }}
+
+      - name: Run versioned tests
+        shell: bash
+        run: |
+          nox -s "test_versions-${{ matrix.python-version }}(with_mlflow=${{ matrix.with_mlflow }}, azureml_spec='${{ matrix.azureml_spec }}', kedro_spec='${{ matrix.kedro_spec }}')"
+        env:
+          PYTEST_XDIST_AUTO_NUM_WORKERS: 0

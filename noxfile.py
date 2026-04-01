@@ -19,6 +19,16 @@ MIN_VERSION = "3.11"
 MAX_VERSION = "3.13"
 PYTHON_VERSIONS = [v for v in ALL_VERSIONS if v >= MIN_VERSION and v <= MAX_VERSION]
 
+# Version specs for matrix testing
+KEDRO_SPECS = [
+    "kedro>=1.0,<2.0",
+]
+
+AZUREML_SPECS = [
+    "azure-ai-ml>=1.2,<1.20",
+    "azure-ai-ml>=1.20",
+]
+
 
 @nox.session(python=PYTHON_VERSIONS[0], venv_backend="uv")
 def test_coverage(session: nox.Session) -> None:
@@ -174,6 +184,38 @@ def test_compat(session: nox.Session) -> None:
         "auto",
         "-v",
     )
+
+
+@nox.session(python=PYTHON_VERSIONS, venv_backend="uv")
+@nox.parametrize("kedro_spec", KEDRO_SPECS)
+@nox.parametrize("azureml_spec", AZUREML_SPECS)
+@nox.parametrize("with_mlflow", [False, True])
+def test_versions(session: nox.Session, azureml_spec: str, kedro_spec: str, with_mlflow: bool) -> None:
+    """Run the test suite across a matrix of Kedro and azure-ai-ml versions."""
+    sync_args = [
+        "uv",
+        "sync",
+        "--no-default-groups",
+        "--group",
+        "tests",
+    ]
+    if with_mlflow:
+        sync_args += ["--extra", "mlflow"]
+    session.run_install(*sync_args, env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location})
+
+    pip_specs = [kedro_spec, azureml_spec]
+    # azure-ai-ml<1.20 uses marshmallow._T removed in 3.24
+    if "<1.20" in azureml_spec:
+        pip_specs.append("marshmallow<3.24")
+    session.run_install(
+        "uv",
+        "pip",
+        "install",
+        *pip_specs,
+        env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location},
+    )
+
+    session.run("pytest", "tests", *session.posargs)
 
 
 @nox.session(venv_backend="uv")

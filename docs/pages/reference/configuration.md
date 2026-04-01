@@ -1,6 +1,6 @@
 # Configuration Reference
 
-All plugin settings live in `conf/<env>/azureml.yml`. The file is parsed into `KedroAzureMLConfig`.
+All plugin settings live in `conf/<env>/azureml.yml`. The file is parsed into [`KedroAzureMLConfig`][kedro_azureml_pipeline.config.KedroAzureMLConfig]. For dataset configuration in `catalog.yml`, see the [Datasets reference](datasets.md).
 
 ## Top-level structure
 
@@ -38,7 +38,7 @@ Each workspace entry (`WorkspaceConfig`) has the following fields:
 | `resource_group` | string | yes | Azure resource group name |
 | `name` | string | yes | Azure ML workspace name |
 
-Jobs reference a workspace by name via their `workspace` field. The `__default__` is used when no workspace is specified.
+Jobs reference a workspace by name via their `workspace` field. The `__default__` is used when no workspace is specified. See [Configure multiple workspaces](../how-to/configure-multiple-workspaces.md) for a walkthrough.
 
 ---
 
@@ -62,6 +62,20 @@ Each compute entry (`ClusterConfig`) has the following fields:
 
 Jobs reference a compute entry by name via their `compute` field.
 
+### Tag-based routing
+
+Kedro node tags can route nodes to specific compute clusters. When a node has a tag that matches a named compute entry, that entry is merged with `__default__`:
+
+```yaml
+compute:
+  __default__:
+    cluster_name: "cpu-cluster"
+  gpu:
+    cluster_name: "gpu-cluster"
+```
+
+A node tagged `gpu` in your Kedro pipeline will run on `gpu-cluster`. Nodes without a matching tag fall back to `__default__`. Fields from the tagged entry override `__default__` fields.
+
 ---
 
 ## `execution`
@@ -79,7 +93,9 @@ execution:
 |---|---|---|
 | `environment` | `null` | Azure ML environment name (e.g. `my-env@latest` or `my-env:3`) |
 | `code_directory` | `null` | Local directory to upload as a code snapshot; `null` disables code upload |
-| `working_directory` | `null` | Working directory inside the compute container |
+| `working_directory` | `null` | Working directory inside the compute container. Set this when your Azure ML environment expects code at a specific path (e.g. `/home/kedro`). When `null`, Azure ML uses its default working directory. |
+
+The combination of `environment` and `code_directory` determines the deployment flow. When `code_directory` is set (e.g. `"."`), the plugin uploads a snapshot of your project and runs it inside the environment (**code flow**). When `code_directory` is `null`, the plugin expects the code to already be baked into the Docker image referenced by `environment` (**image flow**). See [Deploy from CI/CD](../how-to/deploy-from-cicd.md) for guidance on choosing between the two.
 
 ---
 
@@ -95,7 +111,7 @@ schedules:
       time_zone: "Europe/London"
 ```
 
-Each schedule entry has exactly one of `cron` or `recurrence`.
+Each schedule entry has exactly one of `cron` or `recurrence`. See [Schedule pipelines](../how-to/schedule-pipelines.md) for end-to-end setup.
 
 ### `cron`
 
@@ -151,6 +167,8 @@ jobs:
 
 ### `pipeline` filter options
 
+These fields correspond to the parameters of Kedro's `Pipeline.filter()` method.
+
 | Field | Default | Description |
 |---|---|---|
 | `pipeline_name` | `"__default__"` | Kedro pipeline name |
@@ -166,7 +184,7 @@ jobs:
 
 ## Environment variables
 
-Environment variables can be injected into pipeline steps at run time using `--env-var KEY=VALUE` on any CLI command that supports it.
+The following environment variables are set automatically by the plugin during remote execution. They are reserved and should not be set directly.
 
 | Variable | Set by | Description |
 |---|---|---|

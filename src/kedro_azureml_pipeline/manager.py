@@ -1,5 +1,6 @@
 """Kedro session and configuration management for Azure ML."""
 
+import logging
 import os
 from functools import cached_property
 
@@ -12,6 +13,8 @@ from kedro.framework.session import KedroSession
 from omegaconf import DictConfig, OmegaConf
 
 from kedro_azureml_pipeline.config import KedroAzureMLConfig
+
+logger = logging.getLogger(__name__)
 
 
 class KedroContextManager:
@@ -28,8 +31,7 @@ class KedroContextManager:
 
     See Also
     --------
-    `kedro_azureml_pipeline.config.KedroAzureMLConfig` : Configuration loaded via ``plugin_config``.
-    `kedro_azureml_pipeline.cli_functions.submit_scheduled_jobs` : Uses this manager for context.
+    [KedroAzureMLConfig][kedro_azureml_pipeline.config.KedroAzureMLConfig] : Configuration loaded via ``plugin_config``.
     """
 
     def __init__(
@@ -52,7 +54,8 @@ class KedroContextManager:
         KedroContext
             The Kedro context loaded from the session.
         """
-        assert self.session is not None, "Session not  initialized yet"
+        if self.session is None:
+            raise RuntimeError("Session not initialized yet")
         return self.session.load_context()
 
     def _ensure_obj_is_dict(self, obj):
@@ -92,7 +95,7 @@ class KedroContextManager:
         cl: AbstractConfigLoader = self.context.config_loader
         try:
             obj = self.context.config_loader["azureml"]
-        except Exception:
+        except (KeyError, MissingConfigException):
             obj = None
 
         if obj is None:
@@ -123,6 +126,7 @@ class KedroContextManager:
         KedroContextManager
             This instance with an active session.
         """
+        logger.info("Creating KedroSession (env=%s, project_path=%s)", self.env, self.project_path)
         self.session = KedroSession.create(self.project_path, env=self.env, runtime_params=self.runtime_params)
         return self
 

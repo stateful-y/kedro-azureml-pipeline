@@ -1,7 +1,9 @@
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pandas as pd
 import pytest
+from azure.core.exceptions import ResourceNotFoundError
 from kedro.io.core import VERSIONED_FLAG_KEY, DatasetError, Version
 from kedro_datasets.pandas import ParquetDataset
 from kedro_datasets.pickle import PickleDataset
@@ -412,6 +414,49 @@ class TestAzureMLAssetDataset:
         assert ds._download is False
         assert ds._local_run is False
 
+    def test_get_latest_version_resource_not_found(self):
+        """``_get_latest_version`` wraps ``ResourceNotFoundError`` as ``DatasetNotFoundError``."""
+        from kedro.io.core import DatasetNotFoundError
+
+        ds = AzureMLAssetDataset(
+            dataset={"type": PickleDataset, "filepath": "test.pickle"},
+            azureml_dataset="missing_asset",
+            version=Version(None, None),
+        )
+        mock_client = MagicMock()
+        mock_client.data.get.side_effect = ResourceNotFoundError("not found")
+        mock_ctx = MagicMock()
+        mock_ctx.__enter__ = MagicMock(return_value=mock_client)
+        mock_ctx.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("kedro_azureml_pipeline.datasets.asset_dataset._get_azureml_client", return_value=mock_ctx),
+            pytest.raises(DatasetNotFoundError, match="Did not find Azure ML Data Asset"),
+        ):
+            ds._get_latest_version()
+
+    def test_load_version_not_found(self):
+        """``_load`` wraps ``ResourceNotFoundError`` as ``VersionNotFoundError``."""
+        from kedro.io.core import VersionNotFoundError
+
+        ds = AzureMLAssetDataset(
+            dataset={"type": PickleDataset, "filepath": "test.pickle"},
+            azureml_dataset="test_ds",
+            azureml_version="99",
+        )
+        ds._download = True
+        mock_client = MagicMock()
+        mock_client.data.get.side_effect = ResourceNotFoundError("version 99 not found")
+        mock_ctx = MagicMock()
+        mock_ctx.__enter__ = MagicMock(return_value=mock_client)
+        mock_ctx.__exit__ = MagicMock(return_value=False)
+
+        with (
+            patch("kedro_azureml_pipeline.datasets.asset_dataset._get_azureml_client", return_value=mock_ctx),
+            pytest.raises(VersionNotFoundError, match="Did not find version 99"),
+        ):
+            ds._load()
+
 
 class TestAzureMLPipelineDataset:
     """Tests for ``AzureMLPipelineDataset`` save and load."""
@@ -447,6 +492,15 @@ class TestAzureMLPipelineDataset:
         desc = ds._describe()
         assert isinstance(desc, dict)
 
+    def test_filepath_property_returns_path(self, tmp_path: Path):
+        """``_filepath`` matches ``path`` for kedro-mlflow compatibility."""
+        ds = AzureMLPipelineDataset({
+            "type": PickleDataset,
+            "backend": "cloudpickle",
+            "filepath": str(tmp_path / "compat.pickle"),
+        })
+        assert ds._filepath == ds.path
+
     def test_exists_reflects_file_state(self, tmp_path: Path):
         """``_exists`` returns whether the underlying file is present."""
         ds = AzureMLPipelineDataset({
@@ -472,3 +526,17 @@ class TestAzureMLPipelineDataset:
         ds.save("test")
         assert modified_path.stat().st_size > 0, "File does not seem to be saved"
         assert ds.load() == "test", "Objects are not the same after deserialization"
+
+    def test_save_skipped_on_distributed_non_master(self, tmp_path: Path):
+        """On a distributed non-master node, save is skipped with a warning."""
+        ds = AzureMLPipelineDataset({
+            "type": PickleDataset,
+            "backend": "cloudpickle",
+            "filepath": str(tmp_path / "no_save.pickle"),
+        })
+        with (
+            patch("kedro_azureml_pipeline.datasets.pipeline_dataset.is_distributed_environment", return_value=True),
+            patch("kedro_azureml_pipeline.datasets.pipeline_dataset.is_distributed_master_node", return_value=False),
+        ):
+            ds.save("data")
+        assert not (tmp_path / "no_save.pickle").exists()

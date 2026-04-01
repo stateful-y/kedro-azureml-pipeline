@@ -23,6 +23,7 @@ dependencies = [
     "kedro>=1.0.0",
     "kedro-datasets>=1.0.0",
     "pydantic>=2.6.4",
+    "cachetools>=5.0.0",
     "cloudpickle>=3.0.0",
     "azure-ai-ml>=1.2.0",
     "pyarrow>=18.0.0",
@@ -36,11 +37,11 @@ mlflow = [
 ]
 
 [project.entry-points."kedro.project_commands"]
-azureml = "kedro_azureml_pipeline.cli:commands"
+azureml = "kedro_azureml_pipeline.cli.commands:commands"
 
 [project.entry-points."kedro.hooks"]
-azure_local_run_hook = "kedro_azureml_pipeline.hooks:azureml_local_run_hook"
-mlflow_azureml_hook = "kedro_azureml_pipeline.mlflow_hook:mlflow_azureml_hook"
+azure_local_run_hook = "kedro_azureml_pipeline.hooks.local_run:azureml_local_run_hook"
+mlflow_azureml_hook = "kedro_azureml_pipeline.hooks.mlflow:mlflow_azureml_hook"
 
 [dependency-groups]
 dev = [
@@ -125,6 +126,8 @@ ignore = [
     "E501",    # line too long (handled by formatter)
     "B008",    # do not perform function calls in argument defaults
     "PLC0415", # import outside top-level (lazy imports used intentionally)
+    "SIM102",  # collapsible if (clarity over brevity)
+    "SIM105",  # contextlib.suppress (comments on except clauses preferred)
     "PLR0913", # too many args in func def
     "PLR0915", # too many statements
     "PLR0912", # too many branches
@@ -134,10 +137,10 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*" = ["ARG", "S101", "T201", "PLR2004"]  # Allow assert statements, prints, and magic values in tests
 "docs/**/*" = ["T201", "ARG001", "PLW0603", "SIM105", "SIM108"]  # Allow prints, unused args, globals, and simplifiable patterns in documentation hooks
-"src/kedro_azureml_pipeline/cli.py" = ["ARG001"]  # Click callbacks receive unused context
-"src/kedro_azureml_pipeline/cli_functions.py" = ["ARG001"]  # Click callbacks receive unused context/param
-"src/kedro_azureml_pipeline/hooks.py" = ["ARG002"]  # Kedro hook signatures require specific args
-"src/kedro_azureml_pipeline/mlflow_hook.py" = ["ARG002"]  # Kedro hook signatures require specific args
+"src/kedro_azureml_pipeline/cli/commands.py" = ["ARG001"]  # Click callbacks receive unused context
+"src/kedro_azureml_pipeline/cli/functions.py" = ["ARG001"]  # Click callbacks receive unused context/param
+"src/kedro_azureml_pipeline/hooks/local_run.py" = ["ARG002"]  # Kedro hook signatures require specific args
+"src/kedro_azureml_pipeline/hooks/mlflow.py" = ["ARG002"]  # Kedro hook signatures require specific args
 "src/kedro_azureml_pipeline/generator.py" = ["ARG002"]  # Method overrides require specific args
 
 [tool.ruff.lint.isort]
@@ -177,6 +180,16 @@ addopts = [
 markers = [
     "integration: marks tests as integration tests that run subprocesses (deselect with '-m \"not integration\"')",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+filterwarnings = [
+    # Ignore Pydantic v2 deprecation warnings during tests
+    "ignore::pydantic.warnings.PydanticDeprecatedSince20",
+    "ignore::pydantic.warnings.PydanticDeprecatedSince212",
+    # Silence Kedro framework warnings about missing pipelines in test scenarios
+    "ignore:Your project does not contain any pipelines with nodes:UserWarning:kedro.framework.cli.starters",
+    # Ignore azure-ai-ml SDK deprecation warnings
+    "ignore::DeprecationWarning:azure",
+    "ignore::FutureWarning:azure",
 ]
 
 [tool.coverage.paths]
@@ -232,14 +245,19 @@ exclude = ["CHANGELOG.md", "site", "htmlcov", ".nox", ".venv"]
 # Pre-existing type issues in Azure ML SDK integration & Click parameter coercion.
 # TODO: Gradually fix and re-enable these rules.
 [tool.ty.rules]
-invalid-assignment = "ignore"
-invalid-argument-type = "ignore"
-invalid-parameter-default = "ignore"
-invalid-return-type = "ignore"
-unresolved-attribute = "ignore"
-unresolved-import = "ignore"
-no-matching-overload = "ignore"
-invalid-method-override = "ignore"
+invalid-assignment = "warn"
+invalid-argument-type = "warn"
+invalid-parameter-default = "warn"
+invalid-return-type = "warn"
+unresolved-attribute = "warn"
+unresolved-import = "warn"
+no-matching-overload = "warn"
+invalid-method-override = "warn"
+not-subscriptable = "warn"
+call-non-callable = "warn"
+unsupported-operator = "warn"
+missing-argument = "warn"
+invalid-type-form = "warn"
 
 [tool.commitizen]
 name = "cz_conventional_commits"

@@ -18,6 +18,7 @@ from kedro_azureml_pipeline.config import (
     RecurrencePatternConfig,
     RecurrenceScheduleConfig,
     ScheduleConfig,
+    WorkspaceConfig,
 )
 from kedro_azureml_pipeline.generator import AzureMLPipelineGenerator
 from kedro_azureml_pipeline.scheduler import (
@@ -96,6 +97,8 @@ def tagged_pipeline() -> Pipeline:
 
 
 class TestConfigModels:
+    """Schedule and pipeline filter config parsing."""
+
     def test_full_config_parses_correctly(self, full_config: KedroAzureMLConfig):
         assert full_config.schedules is not None
         assert "daily_morning" in full_config.schedules
@@ -162,6 +165,8 @@ class TestConfigModels:
 
 
 class TestPipelineFiltering:
+    """Generator pipeline filtering via ``PipelineFilterOptions``."""
+
     def test_generator_with_tag_filter(self, tagged_pipeline, dummy_plugin_config, multi_catalog):
         filter_opts = PipelineFilterOptions(
             pipeline_name="test_pipe",
@@ -227,6 +232,8 @@ class TestPipelineFiltering:
 
 
 class TestScheduler:
+    """Schedule resolution, trigger building, and job schedule creation."""
+
     def test_resolve_schedule_by_name(self, full_config: KedroAzureMLConfig):
         result = resolve_schedule("daily_morning", full_config.schedules)
         assert result.cron is not None
@@ -283,6 +290,179 @@ class TestScheduler:
 
 
 class TestScheduleCLI:
+    """``kedro azureml schedule`` CLI integration."""
+
+    def test_schedule_workspace_and_env_echo(
+        self,
+        tagged_pipeline,
+        dummy_plugin_config,
+        multi_catalog,
+        patched_kedro_package,
+        cli_context,
+        tmp_path,
+    ):
+        """``--workspace`` and ``--azureml-environment`` echo overrides."""
+        from click.testing import CliRunner
+
+        import kedro_azureml_pipeline.cli.commands as cli
+        from kedro_azureml_pipeline.manager import KedroContextManager
+
+        create_kedro_conf_dirs(tmp_path)
+        dummy_plugin_config.schedules = {
+            "daily": ScheduleConfig(cron=CronScheduleConfig(expression="0 6 * * *")),
+        }
+        dummy_plugin_config.jobs = {
+            "test_job": JobConfig(
+                pipeline=PipelineFilterOptions(pipeline_name="__default__"),
+                schedule="daily",
+            ),
+        }
+
+        mock_mgr = MagicMock(spec=KedroContextManager)
+        mock_mgr.plugin_config = dummy_plugin_config
+        mock_mgr.context.params = {}
+        mock_mgr.context.catalog = multi_catalog
+        mock_mgr.context.config_loader.__getitem__ = MagicMock(side_effect=KeyError("mlflow"))
+
+        with (
+            patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
+            patch.object(KedroContextManager, "__exit__", return_value=False),
+            patch.object(
+                AzureMLPipelineGenerator,
+                "get_kedro_pipeline",
+                return_value=tagged_pipeline,
+            ),
+            patch.object(Path, "cwd", return_value=tmp_path),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli.schedule,
+                ["-j", "test_job", "--dry-run", "--workspace", "__default__", "--azureml-environment", "my-env@latest"],
+                obj=cli_context,
+            )
+            assert result.exit_code == 0, result.output
+            assert "Overriding workspace to: __default__" in result.output
+            assert "Overriding Azure ML Environment to: my-env@latest" in result.output
+
+    def test_schedule_failure_exit_code(
+        self,
+        tagged_pipeline,
+        dummy_plugin_config,
+        multi_catalog,
+        patched_kedro_package,
+        cli_context,
+        tmp_path,
+    ):
+        """When a schedule fails, exit code is non-zero."""
+        from click.testing import CliRunner
+
+        import kedro_azureml_pipeline.cli.commands as cli
+        from kedro_azureml_pipeline.manager import KedroContextManager
+        from kedro_azureml_pipeline.scheduler import AzureMLScheduleClient
+
+        create_kedro_conf_dirs(tmp_path)
+        dummy_plugin_config.schedules = {
+            "daily": ScheduleConfig(cron=CronScheduleConfig(expression="0 6 * * *")),
+        }
+        dummy_plugin_config.jobs = {
+            "test_job": JobConfig(
+                pipeline=PipelineFilterOptions(pipeline_name="__default__"),
+                schedule="daily",
+            ),
+        }
+
+        mock_mgr = MagicMock(spec=KedroContextManager)
+        mock_mgr.plugin_config = dummy_plugin_config
+        mock_mgr.context.params = {}
+        mock_mgr.context.catalog = multi_catalog
+        mock_mgr.context.config_loader.__getitem__ = MagicMock(side_effect=KeyError("mlflow"))
+
+        with (
+            patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
+            patch.object(KedroContextManager, "__exit__", return_value=False),
+            patch.object(
+                AzureMLPipelineGenerator,
+                "get_kedro_pipeline",
+                return_value=tagged_pipeline,
+            ),
+            patch.object(Path, "cwd", return_value=tmp_path),
+            patch.object(
+                AzureMLScheduleClient,
+                "create_or_update_schedule",
+                side_effect=RuntimeError("Azure error"),
+            ),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli.schedule,
+                ["-j", "test_job"],
+                obj=cli_context,
+            )
+            assert result.exit_code == 1
+            assert "Some schedules failed" in result.output
+            assert "Failed to schedule job" in result.output
+
+    def test_schedule_succeeds_non_dry_run(
+        self,
+        tagged_pipeline,
+        dummy_plugin_config,
+        multi_catalog,
+        patched_kedro_package,
+        cli_context,
+        tmp_path,
+    ):
+        """Non-dry-run success echoes the created schedule name."""
+        from click.testing import CliRunner
+
+        import kedro_azureml_pipeline.cli.commands as cli
+        from kedro_azureml_pipeline.manager import KedroContextManager
+        from kedro_azureml_pipeline.scheduler import AzureMLScheduleClient
+
+        create_kedro_conf_dirs(tmp_path)
+        dummy_plugin_config.schedules = {
+            "daily": ScheduleConfig(cron=CronScheduleConfig(expression="0 6 * * *")),
+        }
+        dummy_plugin_config.jobs = {
+            "test_job": JobConfig(
+                pipeline=PipelineFilterOptions(pipeline_name="__default__"),
+                schedule="daily",
+            ),
+        }
+
+        mock_mgr = MagicMock(spec=KedroContextManager)
+        mock_mgr.plugin_config = dummy_plugin_config
+        mock_mgr.context.params = {}
+        mock_mgr.context.catalog = multi_catalog
+        mock_mgr.context.config_loader.__getitem__ = MagicMock(side_effect=KeyError("mlflow"))
+
+        mock_result = MagicMock()
+        mock_result.name = "test_job"
+
+        with (
+            patch.object(KedroContextManager, "__enter__", return_value=mock_mgr),
+            patch.object(KedroContextManager, "__exit__", return_value=False),
+            patch.object(
+                AzureMLPipelineGenerator,
+                "get_kedro_pipeline",
+                return_value=tagged_pipeline,
+            ),
+            patch.object(Path, "cwd", return_value=tmp_path),
+            patch.object(
+                AzureMLScheduleClient,
+                "create_or_update_schedule",
+                return_value=mock_result,
+            ),
+        ):
+            runner = CliRunner()
+            result = runner.invoke(
+                cli.schedule,
+                ["-j", "test_job"],
+                obj=cli_context,
+            )
+            assert result.exit_code == 0, result.output
+            assert "created/updated successfully" in result.output
+            assert "All schedules created successfully" in result.output
+
     def test_schedule_dry_run(
         self,
         tagged_pipeline,
@@ -295,7 +475,7 @@ class TestScheduleCLI:
         """--dry-run should report what would be created without calling Azure."""
         from click.testing import CliRunner
 
-        from kedro_azureml_pipeline import cli
+        import kedro_azureml_pipeline.cli.commands as cli
         from kedro_azureml_pipeline.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
@@ -349,7 +529,7 @@ class TestScheduleCLI:
         """--job flag should filter to only the named job."""
         from click.testing import CliRunner
 
-        from kedro_azureml_pipeline import cli
+        import kedro_azureml_pipeline.cli.commands as cli
         from kedro_azureml_pipeline.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
@@ -405,7 +585,7 @@ class TestScheduleCLI:
         """Requesting a non-existent job name should error."""
         from click.testing import CliRunner
 
-        from kedro_azureml_pipeline import cli
+        import kedro_azureml_pipeline.cli.commands as cli
         from kedro_azureml_pipeline.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
@@ -448,7 +628,7 @@ class TestScheduleCLI:
         """Schedule should error when no jobs section exists in config."""
         from click.testing import CliRunner
 
-        from kedro_azureml_pipeline import cli
+        import kedro_azureml_pipeline.cli.commands as cli
         from kedro_azureml_pipeline.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
@@ -486,7 +666,7 @@ class TestScheduleCLI:
         """Schedule should error when a job has no schedule configured."""
         from click.testing import CliRunner
 
-        from kedro_azureml_pipeline import cli
+        import kedro_azureml_pipeline.cli.commands as cli
         from kedro_azureml_pipeline.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
@@ -524,6 +704,8 @@ class TestScheduleCLI:
 
 
 class TestRunCLI:
+    """``kedro azureml run`` CLI integration."""
+
     def test_run_dry_run(
         self,
         tagged_pipeline,
@@ -536,7 +718,7 @@ class TestRunCLI:
         """--dry-run should report what would be run without calling Azure."""
         from click.testing import CliRunner
 
-        from kedro_azureml_pipeline import cli
+        import kedro_azureml_pipeline.cli.commands as cli
         from kedro_azureml_pipeline.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
@@ -586,7 +768,7 @@ class TestRunCLI:
         """run should ignore schedule config and run immediately."""
         from click.testing import CliRunner
 
-        from kedro_azureml_pipeline import cli
+        import kedro_azureml_pipeline.cli.commands as cli
         from kedro_azureml_pipeline.manager import KedroContextManager
 
         create_kedro_conf_dirs(tmp_path)
@@ -627,3 +809,101 @@ class TestRunCLI:
             assert "[DRY RUN]" in result.output
             assert "Would run" in result.output
             assert "Would create schedule" not in result.output
+
+
+class TestBuildTriggerEdgeCases:
+    """Coverage for optional trigger fields (start_time, end_time, pattern)."""
+
+    def test_cron_trigger_with_start_and_end_time(self):
+        cfg = ScheduleConfig(
+            cron=CronScheduleConfig(
+                expression="0 6 * * *",
+                start_time="2025-01-01T00:00:00",
+                end_time="2025-12-31T23:59:59",
+            )
+        )
+        trigger = build_trigger(cfg)
+        assert isinstance(trigger, CronTrigger)
+        assert trigger.start_time == "2025-01-01T00:00:00"
+        assert trigger.end_time == "2025-12-31T23:59:59"
+
+    def test_recurrence_trigger_with_start_and_end_time(self):
+        cfg = ScheduleConfig(
+            recurrence=RecurrenceScheduleConfig(
+                frequency="day",
+                interval=1,
+                start_time="2025-01-01T00:00:00",
+                end_time="2025-12-31T23:59:59",
+            )
+        )
+        trigger = build_trigger(cfg)
+        assert isinstance(trigger, RecurrenceTrigger)
+        assert trigger.start_time == "2025-01-01T00:00:00"
+        assert trigger.end_time == "2025-12-31T23:59:59"
+
+    def test_recurrence_trigger_without_schedule_pattern(self):
+        """Recurrence without a pattern (no hours/minutes/weekdays)."""
+        cfg = ScheduleConfig(
+            recurrence=RecurrenceScheduleConfig(
+                frequency="hour",
+                interval=4,
+            )
+        )
+        trigger = build_trigger(cfg)
+        assert isinstance(trigger, RecurrenceTrigger)
+        assert trigger.frequency == "hour"
+        assert trigger.interval == 4
+
+    def test_recurrence_trigger_with_partial_pattern(self):
+        """Recurrence with only hours and minutes set in the pattern."""
+        cfg = ScheduleConfig(
+            recurrence=RecurrenceScheduleConfig(
+                frequency="day",
+                interval=1,
+                schedule=RecurrencePatternConfig(hours=[9, 17], minutes=[0]),
+            )
+        )
+        trigger = build_trigger(cfg)
+        assert isinstance(trigger, RecurrenceTrigger)
+
+    def test_recurrence_trigger_full_pattern(self):
+        """Recurrence with hours, minutes, and week_days in the pattern."""
+        cfg = ScheduleConfig(
+            recurrence=RecurrenceScheduleConfig(
+                frequency="week",
+                interval=1,
+                schedule=RecurrencePatternConfig(
+                    hours=[9],
+                    minutes=[0, 30],
+                    week_days=["Monday", "Friday"],
+                ),
+            )
+        )
+        trigger = build_trigger(cfg)
+        assert isinstance(trigger, RecurrenceTrigger)
+        assert trigger.schedule.hours == [9]
+        assert trigger.schedule.minutes == [0, 30]
+        assert trigger.schedule.week_days == ["Monday", "Friday"]
+
+
+class TestAzureMLScheduleClient:
+    """Coverage for schedule client create/update."""
+
+    def test_create_or_update_schedule(self):
+        from kedro_azureml_pipeline.scheduler import AzureMLScheduleClient
+
+        schedule_client = AzureMLScheduleClient()
+        mock_schedule = MagicMock(spec=JobSchedule)
+        mock_workspace = MagicMock(spec=WorkspaceConfig)
+
+        with patch("kedro_azureml_pipeline.scheduler._get_azureml_client") as mock_ctx:
+            mock_ml_client = MagicMock()
+            mock_result = MagicMock()
+            mock_result.name = "test-schedule"
+            mock_ml_client.schedules.begin_create_or_update.return_value.result.return_value = mock_result
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_ml_client)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
+
+            result = schedule_client.create_or_update_schedule(mock_schedule, mock_workspace)
+            assert result.name == "test-schedule"
+            mock_ml_client.schedules.begin_create_or_update.assert_called_once_with(schedule=mock_schedule)

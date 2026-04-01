@@ -26,9 +26,9 @@ def distributed_job(framework: Framework, num_nodes: str | int, **kwargs):
 
     See Also
     --------
-    `kedro_azureml_pipeline.distributed.config.DistributedNodeConfig` : Config attached by this decorator.
-    `kedro_azureml_pipeline.distributed.config.Framework` : Supported frameworks.
-    `kedro_azureml_pipeline.generator.AzureMLPipelineGenerator` : Reads the attached config.
+    [DistributedNodeConfig][kedro_azureml_pipeline.distributed.config.DistributedNodeConfig] : Config attached by this decorator.
+    [Framework][kedro_azureml_pipeline.distributed.config.Framework] : Supported frameworks.
+    [AzureMLPipelineGenerator][kedro_azureml_pipeline.generator.AzureMLPipelineGenerator] : Reads the attached config.
     """
 
     def _decorator(func):

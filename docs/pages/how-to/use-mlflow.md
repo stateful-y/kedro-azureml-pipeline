@@ -4,13 +4,16 @@ This guide shows how to track experiments with [kedro-mlflow](https://kedro-mlfl
 
 ## Prerequisites
 
-- `kedro-mlflow` installed and configured in your project
+- `kedro-mlflow` installed, configured in your project, and included in your Azure ML environment (the remote container must have it installed)
 - The Kedro AzureML Pipeline plugin installed and configured (see [Getting Started](../tutorials/getting-started.md))
-- The `azureml_local_run_hook` registered in `settings.py`
+
+!!! note
+
+    Both plugin hooks ([`AzureMLLocalRunHook`][kedro_azureml_pipeline.hooks.AzureMLLocalRunHook] and [`MlflowAzureMLHook`][kedro_azureml_pipeline.hooks.MlflowAzureMLHook]) are auto-registered via Python entry points. You do not need to add them to `HOOKS` in `settings.py`.
 
 ## Configure kedro-mlflow
 
-Follow the standard `kedro-mlflow` setup in your project. The plugin does not replace or modify any `kedro-mlflow` configuration:
+Follow the standard `kedro-mlflow` setup in your project. The plugin does not replace or modify any Kedro MLflow configuration:
 
 ```yaml
 # conf/base/mlflow.yml (kedro-mlflow configuration)
@@ -38,7 +41,7 @@ def train_model(X_train, y_train):
     return model
 ```
 
-During local runs, these calls go to whatever tracking URI `kedro-mlflow` is configured with. During Azure ML runs, they go to your Azure ML workspace's MLflow endpoint.
+During local runs, these calls go to whatever tracking URI Kedro MLflow is configured with. During Azure ML runs, they go to your Azure ML workspace's MLflow endpoint.
 
 ## View results in Azure ML Studio
 

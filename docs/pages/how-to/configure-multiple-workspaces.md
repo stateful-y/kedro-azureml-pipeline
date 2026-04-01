@@ -5,7 +5,7 @@ This guide shows how to define multiple Azure ML workspaces in a single configur
 ## Prerequisites
 
 - The Kedro AzureML Pipeline plugin configured with at least one workspace (see [Getting Started](../tutorials/getting-started.md))
-- Access to the additional Azure ML workspaces you want to configure
+- Access to the additional [Azure ML workspaces](https://learn.microsoft.com/en-us/azure/machine-learning/concept-workspace) you want to configure
 
 ## Define additional workspaces
 

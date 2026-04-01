@@ -2,18 +2,55 @@
 
 import json
 import logging
+import os
 from collections.abc import Callable
 from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import TYPE_CHECKING
 
 from azure.ai.ml import MLClient
 from azure.ai.ml.entities import Job
+from azure.core.exceptions import ClientAuthenticationError, HttpResponseError, ServiceRequestError
+from azure.identity import CredentialUnavailableError, DefaultAzureCredential, InteractiveBrowserCredential
 
-from kedro_azureml_pipeline.auth.utils import get_azureml_credentials
 from kedro_azureml_pipeline.config import WorkspaceConfig
 
+if TYPE_CHECKING:
+    from azure.core.credentials import TokenCredential
+
 logger = logging.getLogger(__name__)
+
+
+def get_azureml_credentials() -> "TokenCredential":
+    """Obtain Azure credentials for Azure ML access.
+
+    Tries ``DefaultAzureCredential`` first (excluding managed identity
+    on AzureML compute instances). Falls back to
+    ``InteractiveBrowserCredential`` on failure.
+
+    Returns
+    -------
+    TokenCredential
+        Azure credential object.
+
+    See Also
+    --------
+    [AzureMLPipelinesClient][kedro_azureml_pipeline.client.AzureMLPipelinesClient] : Uses credentials for job submission.
+    [AzureMLScheduleClient][kedro_azureml_pipeline.scheduler.AzureMLScheduleClient] : Uses credentials for schedule management.
+    """
+    try:
+        # On a AzureML compute instance, the managed identity will take precedence,
+        # while it does not have enough permissions.
+        # So, if we are on an AzureML compute instance, we disable the managed identity.
+        is_azureml_managed_identity = "MSI_ENDPOINT" in os.environ
+        credential = DefaultAzureCredential(exclude_managed_identity_credential=is_azureml_managed_identity)
+        # Check if given credential can get token successfully.
+        credential.get_token("https://management.azure.com/.default")
+    except (ClientAuthenticationError, CredentialUnavailableError):
+        # Fall back to InteractiveBrowserCredential in case DefaultAzureCredential not work
+        credential = InteractiveBrowserCredential()
+    return credential
 
 
 @contextmanager
@@ -55,9 +92,9 @@ class AzureMLPipelinesClient:
 
     See Also
     --------
-    `kedro_azureml_pipeline.generator.AzureMLPipelineGenerator` : Generates the pipeline job.
-    `kedro_azureml_pipeline.scheduler.AzureMLScheduleClient` : Schedule-based submission.
-    `kedro_azureml_pipeline.config.WorkspaceConfig` : Workspace config used by ``run``.
+    [AzureMLPipelineGenerator][kedro_azureml_pipeline.generator.AzureMLPipelineGenerator] : Generates the pipeline job.
+    [AzureMLScheduleClient][kedro_azureml_pipeline.scheduler.AzureMLScheduleClient] : Schedule-based submission.
+    [WorkspaceConfig][kedro_azureml_pipeline.config.WorkspaceConfig] : Workspace config used by ``run``.
     """
 
     def __init__(self, azure_pipeline: Job):
@@ -96,6 +133,11 @@ class AzureMLPipelinesClient:
         -------
         bool
             ``True`` if the job completed or was submitted successfully.
+
+        Raises
+        ------
+        ValueError
+            If the compute cluster does not exist.
         """
         if not experiment_name:
             logger.warning(
@@ -105,9 +147,9 @@ class AzureMLPipelinesClient:
             )
         with _get_azureml_client(config) as ml_client:
             effective_cluster_name = compute_name or compute_config.root["__default__"].cluster_name
-            assert (cluster := ml_client.compute.get(effective_cluster_name)), (
-                f"Cluster {effective_cluster_name} does not exist"
-            )
+            cluster = ml_client.compute.get(effective_cluster_name)
+            if not cluster:
+                raise ValueError(f"Cluster {effective_cluster_name} does not exist")
 
             logger.info(
                 f"Creating job on cluster {cluster.name} ({cluster.size}, min instances: {cluster.min_instances}, "
@@ -130,7 +172,7 @@ class AzureMLPipelinesClient:
                 try:
                     ml_client.jobs.stream(pipeline_job.name)
                     return True
-                except Exception:
+                except (HttpResponseError, ServiceRequestError):
                     logger.exception("Error while running the pipeline", exc_info=True)
                     return False
             else:

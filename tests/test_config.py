@@ -2,6 +2,8 @@
 
 import pytest
 import yaml
+from hypothesis import given
+from hypothesis import strategies as st
 from pydantic import ValidationError
 
 from kedro_azureml_pipeline.config import (
@@ -239,3 +241,29 @@ jobs:
         assert cfg.workspace.resolve().name == "ws"
         assert "daily" in cfg.schedules
         assert cfg.jobs["etl"].schedule == "daily"
+
+
+class TestWorkspaceConfigProperty:
+    """Property-based tests for WorkspaceConfig."""
+
+    @given(
+        sub=st.text(min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("L", "N", "Pd"))),
+        rg=st.text(min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("L", "N", "Pd"))),
+        name=st.text(min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("L", "N", "Pd"))),
+    )
+    def test_workspace_round_trips_fields(self, sub, rg, name):
+        """WorkspaceConfig preserves all three fields."""
+        ws = WorkspaceConfig(subscription_id=sub, resource_group=rg, name=name)
+        assert ws.subscription_id == sub
+        assert ws.resource_group == rg
+        assert ws.name == name
+
+
+class TestScheduleConfigProperty:
+    """Property-based tests for ScheduleConfig triggers."""
+
+    @given(expression=st.from_regex(r"[0-9*/, -]{5,30}", fullmatch=True))
+    def test_cron_accepts_any_expression_string(self, expression):
+        """ScheduleConfig with cron accepts arbitrary expression strings."""
+        sc = ScheduleConfig(cron=CronScheduleConfig(expression=expression))
+        assert sc.cron.expression == expression

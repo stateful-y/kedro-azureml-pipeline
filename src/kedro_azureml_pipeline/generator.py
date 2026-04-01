@@ -45,7 +45,7 @@ class ConfigException(BaseException):
 
     See Also
     --------
-    `kedro_azureml_pipeline.generator.AzureMLPipelineGenerator` : Generator that raises this.
+    [AzureMLPipelineGenerator][kedro_azureml_pipeline.generator.AzureMLPipelineGenerator] : Generator that raises this.
     """
 
     pass
@@ -83,10 +83,10 @@ class AzureMLPipelineGenerator:
 
     See Also
     --------
-    `kedro_azureml_pipeline.config.KedroAzureMLConfig` : Plugin configuration consumed here.
-    `kedro_azureml_pipeline.client.AzureMLPipelinesClient` : Submits the generated pipeline.
-    `kedro_azureml_pipeline.runner.AzurePipelinesRunner` : Executes nodes within Azure ML.
-    `kedro_azureml_pipeline.datasets.AzureMLAssetDataset` : Datasets wired into the pipeline.
+    [KedroAzureMLConfig][kedro_azureml_pipeline.config.KedroAzureMLConfig] : Plugin configuration consumed here.
+    [AzureMLPipelinesClient][kedro_azureml_pipeline.client.AzureMLPipelinesClient] : Submits the generated pipeline.
+    [AzurePipelinesRunner][kedro_azureml_pipeline.runner.AzurePipelinesRunner] : Executes nodes within Azure ML.
+    [AzureMLAssetDataset][kedro_azureml_pipeline.datasets.AzureMLAssetDataset] : Datasets wired into the pipeline.
     """
 
     def __init__(
@@ -517,7 +517,8 @@ class AzureMLPipelineGenerator:
         for pipeline_output in pipeline.outputs():
             sanitized_output_name = self._sanitize_param_name(pipeline_output)
             source_node = next((n for n in pipeline.nodes if pipeline_output in n.outputs), None)
-            assert source_node is not None, f"There is no node which outputs `{pipeline_output}` dataset"
+            if source_node is None:
+                raise ConfigException(f"There is no node which outputs `{pipeline_output}` dataset")  # pragma: no cover
             azure_pipeline_outputs[sanitized_output_name] = invoked_components[source_node.name].outputs[
                 sanitized_output_name
             ]
