@@ -204,9 +204,9 @@ def test_versions(session: nox.Session, azureml_spec: str, kedro_spec: str, with
     session.run_install(*sync_args, env={"UV_PROJECT_ENVIRONMENT": session.virtualenv.location})
 
     pip_specs = [kedro_spec, azureml_spec]
-    # azure-ai-ml<1.20 depends on marshmallow internals removed in 3.26
+    # azure-ai-ml<1.20 uses marshmallow._T removed in 3.24
     if "<1.20" in azureml_spec:
-        pip_specs.append("marshmallow<3.26")
+        pip_specs.append("marshmallow<3.24")
     session.run_install(
         "uv",
         "pip",
