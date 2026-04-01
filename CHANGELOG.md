@@ -8,50 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0-alpha.1] - 2026-04-01
 
-This **minor release** includes 22 commits.
+This **minor release** includes 1 commit.
 
-
-### Features
-- Update prepare-release workflow to use new actions versions  by @em-pe
-- Update Kedro version and refactor dataset handling for AzureML compatibility by @em-pe
-- Update Python version in Read the Docs configuration to 3.10 by @em-pe
-- Upgrade Kedro to version 1.0.0 and update Python compatibility in poetry.lock by @em-pe
-- Update numpy to version 1.26.4 and adjust Python markers in poetry.lock by @em-pe
-- Disable python 3.12 unittests for now by @em-pe
-- Update pydantic model methods to get rid of deprecation warnings by @em-pe
-- Update Azure ML configuration and add E2E test reproduction script by @em-pe
-- Replace azureml-fsspec with Azure ML v2 SDK for ARM64 compatibility  by @em-pe
-
-### Bug Fixes
-- Depandabot config by @Lasica
-- Add github actions permissions by @em-pe
-
-### Documentation
-- Fix reference
-
-### Miscellaneous Tasks
-- Enabled dependabot prs & config by @Lasica
-- Disabled code QL actions for dependabot by @Lasica
-- Test exception for e2e tests with dependabot by @Lasica
-- Disable forked_branch build for dependabot PR's by @em-pe
-- Lock kedro version to 1.0.x by @em-pe
-
-### Build
-- Bump rojopolis/spellcheck-github-actions  by @dependabot[bot]
-- Bump pytest-cov from 3.0.0 to 7.0.0  by @dependabot[bot]
-- Bump pytest from 8.3.5 to 8.4.2  by @dependabot[bot]
-- Bump actions/setup-python from 5 to 6  by @dependabot[bot]
-- Bump actions/checkout from 4 to 5  by @dependabot[bot]
-
-### Contributors
-
-Thanks to all contributors for this release:
-- @em-pe
-- @Lasica
-- @dependabot[bot]
-# Changelog
-
-## [Unreleased]
 
 ### Features
 
@@ -70,10 +28,7 @@ Thanks to all contributors for this release:
 - `kedro azureml run` is replaced by `kedro azureml run -j <job>` (immediate execution) and `kedro azureml schedule -j <job>` (persistent schedules). `kedro azureml compile` now requires `-j <job>`. `--subscription-id` replaced by `--workspace`. by [@gtauzin](https://github.com/gtauzin)
 - Blob storage removal: `KedroAzureRunnerDataset`, `KedroAzureRunnerDistributedDataset`, `BlobStorageDataPassing`, `KedroAzureRunnerConfig`, and `runner_dataset.py` module deleted. Pipeline data passing via `AzureMLPipelineDataset` is now the only mode. by [@gtauzin](https://github.com/gtauzin)
 - Removed `kedro azureml run` command and all its options (`--display-name`, `--compute-name`, `--experiment-name`, `-p`/`--pipeline`, `--wait-for-completion`, `--on-job-scheduled`). by [@gtauzin](https://github.com/gtauzin)
-- Removed `init` arguments: `-a`/`--storage-account-name`, `-c`/`--storage-container`, `--use-pipeline-data-passing`, and positional `experiment_name`. by [@gtauzin](https://github.com/gtauzin)
 - Removed deprecated `docker` config section; environment configuration now uses `execution.environment`. by [@gtauzin](https://github.com/gtauzin)
-- Removed constants: `KEDRO_AZURE_BLOB_TEMP_DIR_NAME`, `KEDRO_AZURE_RUNNER_CONFIG`, `KEDRO_AZURE_RUNNER_DATASET_TIMEOUT`. by [@gtauzin](https://github.com/gtauzin)
-- Removed dependencies: `adlfs` and `backoff`. by [@gtauzin](https://github.com/gtauzin)
 - Removed deprecated SDK v1 dataset stubs (`AzureMLPandasDataset`, `AzureMLFileDataset`) and `v1_datasets` module. by [@gtauzin](https://github.com/gtauzin)
 - Migrated project following the `stateful-y/python-package-copier` template. by [@gtauzin](https://github.com/gtauzin)
 - `kedro azureml init` no longer accepts positional arguments or `--aml-env`. It generates `conf/base/azureml.yml` with placeholder values to be filled in manually. by [@gtauzin](https://github.com/gtauzin)
@@ -81,5 +36,16 @@ Thanks to all contributors for this release:
 ### Documentation
 
 - Migrated documentation from Sphinx (RST) to MkDocs with Material theme. by [@gtauzin](https://github.com/gtauzin)
-- Rewrote all documentation pages: getting started, user guide, API reference, and contributing guide. by [@gtauzin](https://github.com/gtauzin)
+- Rewrote all documentation pages based on diataxis approach: getting started, user guide, API reference, and contributing guide. by [@gtauzin](https://github.com/gtauzin)
 - Added NumPy-style docstrings to all public modules, classes, and functions (interrogate coverage at 100%). by [@gtauzin](https://github.com/gtauzin)
+
+### Contributors
+
+Thanks to all contributors for this release:
+- @gtauzin
+
+---
+
+## [`kedro-azureml` v1.0.0]
+
+This project is a fork of [`kedro-azureml`](https://github.com/getindata/kedro-azureml) originally created by [GetInData | Part of Xebia](https://github.com/getindata).
