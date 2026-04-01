@@ -1,5 +1,56 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+
+## [0.1.0-alpha.1] - 2026-04-01
+
+This **minor release** includes 22 commits.
+
+
+### Features
+- Update prepare-release workflow to use new actions versions  by @em-pe
+- Update Kedro version and refactor dataset handling for AzureML compatibility by @em-pe
+- Update Python version in Read the Docs configuration to 3.10 by @em-pe
+- Upgrade Kedro to version 1.0.0 and update Python compatibility in poetry.lock by @em-pe
+- Update numpy to version 1.26.4 and adjust Python markers in poetry.lock by @em-pe
+- Disable python 3.12 unittests for now by @em-pe
+- Update pydantic model methods to get rid of deprecation warnings by @em-pe
+- Update Azure ML configuration and add E2E test reproduction script by @em-pe
+- Replace azureml-fsspec with Azure ML v2 SDK for ARM64 compatibility  by @em-pe
+
+### Bug Fixes
+- Depandabot config by @Lasica
+- Add github actions permissions by @em-pe
+
+### Documentation
+- Fix reference
+
+### Miscellaneous Tasks
+- Enabled dependabot prs & config by @Lasica
+- Disabled code QL actions for dependabot by @Lasica
+- Test exception for e2e tests with dependabot by @Lasica
+- Disable forked_branch build for dependabot PR's by @em-pe
+- Lock kedro version to 1.0.x by @em-pe
+
+### Build
+- Bump rojopolis/spellcheck-github-actions  by @dependabot[bot]
+- Bump pytest-cov from 3.0.0 to 7.0.0  by @dependabot[bot]
+- Bump pytest from 8.3.5 to 8.4.2  by @dependabot[bot]
+- Bump actions/setup-python from 5 to 6  by @dependabot[bot]
+- Bump actions/checkout from 4 to 5  by @dependabot[bot]
+
+### Contributors
+
+Thanks to all contributors for this release:
+- @em-pe
+- @Lasica
+- @dependabot[bot]
+# Changelog
+
 ## [Unreleased]
 
 ### Features
