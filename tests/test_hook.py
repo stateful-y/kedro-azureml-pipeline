@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock, Mock
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from kedro.io.core import Version
@@ -107,3 +107,94 @@ class TestAzureMLLocalRunHook:
     def test_module_level_singleton_exists(self):
         """The module exports a ready-to-use hook instance."""
         assert isinstance(azureml_local_run_hook, AzureMLLocalRunHook)
+
+
+class TestPatchAzuremlArtifactBuilder:
+    """Tests for ``AzureMLLocalRunHook._patch_azureml_artifact_builder``."""
+
+    def test_wraps_builder_that_lacks_var_keyword(self):
+        """The wrapper forwards ``artifact_uri`` and drops extra kwargs."""
+        mock_registry = MagicMock()
+        sentinel = object()
+
+        def fake_builder(artifact_uri=None):
+            return sentinel
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "mlflow": MagicMock(),
+                    "mlflow.store": MagicMock(),
+                    "mlflow.store.artifact": MagicMock(),
+                    "mlflow.store.artifact.artifact_repository_registry": MagicMock(
+                        _artifact_repository_registry=mock_registry,
+                    ),
+                    "azureml": MagicMock(),
+                    "azureml.mlflow": MagicMock(),
+                    "azureml.mlflow.entry_point_loaders": MagicMock(
+                        azureml_artifacts_builder=fake_builder,
+                    ),
+                },
+            ),
+        ):
+            AzureMLLocalRunHook._patch_azureml_artifact_builder()
+
+        mock_registry.register.assert_called_once()
+        scheme, wrapper = mock_registry.register.call_args[0]
+        assert scheme == "azureml"
+
+        result = wrapper(artifact_uri="azureml://foo", tracking_uri="http://t", registry_uri="http://r")
+        assert result is sentinel
+
+    def test_noop_when_builder_already_accepts_kwargs(self):
+        """Patch is skipped when the builder already accepts ``**kwargs``."""
+        mock_registry = MagicMock()
+
+        def compatible_builder(artifact_uri=None, **kwargs):
+            pass
+
+        with (
+            patch.dict(
+                "sys.modules",
+                {
+                    "mlflow": MagicMock(),
+                    "mlflow.store": MagicMock(),
+                    "mlflow.store.artifact": MagicMock(),
+                    "mlflow.store.artifact.artifact_repository_registry": MagicMock(
+                        _artifact_repository_registry=mock_registry,
+                    ),
+                    "azureml": MagicMock(),
+                    "azureml.mlflow": MagicMock(),
+                    "azureml.mlflow.entry_point_loaders": MagicMock(
+                        azureml_artifacts_builder=compatible_builder,
+                    ),
+                },
+            ),
+        ):
+            AzureMLLocalRunHook._patch_azureml_artifact_builder()
+
+        mock_registry.register.assert_not_called()
+
+    def test_noop_when_mlflow_not_installed(self):
+        """Patch is a silent no-op when mlflow is not importable."""
+        with patch.dict("sys.modules", {"mlflow": None}):
+            AzureMLLocalRunHook._patch_azureml_artifact_builder()
+
+    def test_noop_when_azureml_mlflow_not_installed(self):
+        """Patch is a silent no-op when azureml-mlflow is not importable."""
+        with patch.dict("sys.modules", {"azureml": None, "azureml.mlflow": None}):
+            AzureMLLocalRunHook._patch_azureml_artifact_builder()
+
+    def test_called_during_after_context_created(self, mock_azureml_config):
+        """``after_context_created`` invokes the patch."""
+        hook = AzureMLLocalRunHook()
+        context_mock = Mock(
+            config_loader=MagicMock(
+                __getitem__=Mock(return_value={"workspace": {"__default__": mock_azureml_config.to_dict()}}),
+                config_patterns={},
+            )
+        )
+        with patch.object(AzureMLLocalRunHook, "_patch_azureml_artifact_builder") as mock_patch:
+            hook.after_context_created(context_mock)
+            mock_patch.assert_called_once()
