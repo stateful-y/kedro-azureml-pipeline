@@ -52,7 +52,7 @@ Kedro AzureML Pipeline is a [Kedro](https://docs.kedro.org/) plugin that connect
 
 ## License
 
-Kedro AzureML Pipeline is open source and licensed under the [Apache-2.0 License](https://opensource.org/licenses/Apache-2.0).
+This project is licensed under the terms of the [Apache-2.0 License](https://github.com/stateful-y/kedro-azureml-pipeline/blob/main/LICENSE).
 
 ## Acknowledgements
 
@@ -62,6 +62,6 @@ We would also like to thank [Evolta Technologies](https://www.evolta-technologie
 
 ![Evolta Technologies](assets/evolta_logo.png){width=400}
 
-This project is maintained by [stateful-y](https://stateful-y.io), an ML consultancy specializing in MLOps and data science & engineering.
+This project is maintained by [stateful-y](https://stateful-y.io), an ML consultancy specializing in MLOps and data science & engineering. If you're interested in collaborating or learning more about our services, please visit our website.
 
 ![Made by stateful-y](assets/made_by_stateful-y.png){width=200}
