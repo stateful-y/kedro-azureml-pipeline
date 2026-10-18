@@ -7,6 +7,7 @@ import pytest
 import yaml
 from azure.identity import CredentialUnavailableError
 from click.testing import CliRunner
+from kedro.framework.project import pipelines
 from kedro.framework.startup import ProjectMetadata
 
 import kedro_azureml_pipeline.cli.commands as cli
@@ -297,11 +298,19 @@ class TestExecute:
         dummy_plugin_config,
         tmp_path: Path,
     ):
+        def load_registry():
+            # kedro < 1.7 reads `_content` after loading, kedro >= 1.7 the return value
+            pipelines._content = {"__default__": dummy_pipeline}
+            return pipelines._content
+
         patched_azure_runner = AzurePipelinesRunner(data_paths={})
         create_kedro_conf_dirs(tmp_path)
         with (
             patch("kedro_azureml_pipeline.runner.AzurePipelinesRunner", new=patched_azure_runner),
-            patch.dict("kedro.framework.project.pipelines", {"__default__": dummy_pipeline}),
+            # Patch the loader, not the contents: kedro >= 1.7 empties the registry when
+            # `session.run` narrows it to the requested pipeline, dropping a `patch.dict`.
+            patch.object(pipelines, "_content", {}),
+            patch.object(pipelines, "_load_data", side_effect=load_registry),
             patch(
                 "kedro_azureml_pipeline.manager.KedroContextManager.plugin_config",
                 new_callable=mock.PropertyMock,
