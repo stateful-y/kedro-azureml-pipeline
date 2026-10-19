@@ -6,6 +6,56 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.1.0-alpha.4] - 2026-10-19
+
+This **minor release** includes 25 commits.
+
+
+### Features
+- Replace the ignored retry job setting with an enforced limits timeout  ([#89](https://github.com/stateful-y/kedro-azureml-pipeline/pull/89)) by @gtauzin
+- Report the signal name and number when a step is killed by a signal  ([#105](https://github.com/stateful-y/kedro-azureml-pipeline/pull/105)) by @gtauzin
+- Let compute entries select a Kubernetes instance type  ([#112](https://github.com/stateful-y/kedro-azureml-pipeline/pull/112)) by @gtauzin
+- Upload the code snapshot once per submission and add `run --concurrent`  ([#133](https://github.com/stateful-y/kedro-azureml-pipeline/pull/133)) by @gtauzin
+- Add a `--display-name JOB=NAME` option to `kedro azureml run`  ([#135](https://github.com/stateful-y/kedro-azureml-pipeline/pull/135)) by @gtauzin
+- Add webhook notifications for job start, success, and failure  ([#134](https://github.com/stateful-y/kedro-azureml-pipeline/pull/134)) by @gtauzin
+- Send notifications via the Slack API and thread outcomes under the start  ([#137](https://github.com/stateful-y/kedro-azureml-pipeline/pull/137)) by @gtauzin
+- Add `mpi_rank()` to return the process rank in distributed jobs  ([#138](https://github.com/stateful-y/kedro-azureml-pipeline/pull/138)) by @gtauzin
+- Add warning and recovered notifications for runs with stale or missing inputs  ([#205](https://github.com/stateful-y/kedro-azureml-pipeline/pull/205)) by @gtauzin
+
+### Bug Fixes
+- Send step-execution output through logging and fix a Kedro deprecation warning  ([#88](https://github.com/stateful-y/kedro-azureml-pipeline/pull/88)) by @gtauzin
+- Fix a circular ImportError when logging handlers import the distributed helpers  ([#139](https://github.com/stateful-y/kedro-azureml-pipeline/pull/139)) by @gtauzin
+- Pin CI to Python 3.13 and fix a CLI test that failed with kedro 1.7  ([#201](https://github.com/stateful-y/kedro-azureml-pipeline/pull/201)) by @gtauzin
+- Link new issues to private vulnerability reporting and the Read the Docs site  ([#203](https://github.com/stateful-y/kedro-azureml-pipeline/pull/203)) by @gtauzin
+
+### Documentation
+- Link the security page from the Explanation index  ([#86](https://github.com/stateful-y/kedro-azureml-pipeline/pull/86)) by @gtauzin
+- Add a migration guide from kedro-azureml  ([#87](https://github.com/stateful-y/kedro-azureml-pipeline/pull/87)) by @gtauzin
+- Add citation metadata (CITATION.cff) and a citation docs page  ([#90](https://github.com/stateful-y/kedro-azureml-pipeline/pull/90)) by @gtauzin
+- Change the project description and include it in the citation title  ([#98](https://github.com/stateful-y/kedro-azureml-pipeline/pull/98)) by @gtauzin
+
+### Testing
+- Skip the signal-reporting command tests on Windows  ([#106](https://github.com/stateful-y/kedro-azureml-pipeline/pull/106)) by @gtauzin
+
+### Miscellaneous Tasks
+- Verify tag signatures, allow publish retries, and automerge dep updates  ([#85](https://github.com/stateful-y/kedro-azureml-pipeline/pull/85)) by @gtauzin
+- Keep automerged dependency PRs from stalling when they fall behind main  ([#99](https://github.com/stateful-y/kedro-azureml-pipeline/pull/99)) by @gtauzin
+
+### Security
+- Upgrade seven locked dependencies that had known security advisories  ([#179](https://github.com/stateful-y/kedro-azureml-pipeline/pull/179)) by @gtauzin
+
+### Build
+- Bump sqlparse from 0.5.5 to 0.6.0  ([#109](https://github.com/stateful-y/kedro-azureml-pipeline/pull/109)) by @dependabot[bot]
+- Bump mkdocs-material from 9.7.6 to 9.7.7  ([#130](https://github.com/stateful-y/kedro-azureml-pipeline/pull/130)) by @dependabot[bot]
+- Bump gitpython from 3.1.58 to 3.1.59  ([#143](https://github.com/stateful-y/kedro-azureml-pipeline/pull/143)) by @dependabot[bot]
+- Bump anyio from 4.13.0 to 4.14.2  ([#158](https://github.com/stateful-y/kedro-azureml-pipeline/pull/158)) by @dependabot[bot]
+
+### Contributors
+
+Thanks to all contributors for this release:
+- @gtauzin
+- @dependabot[bot]
+
 ## [0.1.0-alpha.3] - 2026-08-12
 
 This **minor release** includes 60 commits.
