@@ -50,11 +50,54 @@ Every Kedro node is its own Azure ML step and its own Kedro session, so the plug
 | `start` | The designated root step | At its pipeline start, without waiting for other roots |
 | `failure` | The step that raised | From its pipeline-error hook, naming the node and the first 250 characters of the exception |
 | `success` | The designated leaf step | After its own node, once every sibling leaf's run is in a terminal state and all finished |
+| `warning` | The designated leaf step | When the job finished but a step marked itself degraded, and the outage is new, has a new table, or has lasted `warning_repeat_hours` since the last message |
+| `recovered` | The designated leaf step | On the first finished run without a degraded step after one with |
 
 Two edge cases keep the "one outcome per job" promise:
 
 - **A sibling leaf died without running its error hook** (killed for memory, cancelled). The outcome step sees the sibling's run failed or killed with no `kedro.error` tag on it, and posts one `failure` naming that sibling. A sibling that raised normally carries the tag and already posted, so the outcome step stays silent.
 - **A sibling never reaches a terminal state within `wait_timeout`.** The outcome step posts an `unknown` message naming the pending siblings. Silence is the failure mode this feature exists to remove, so the cap produces a message rather than nothing.
+
+## Report runs that served degraded output
+
+A job can finish successfully while an input was missing or stale. To be told, have the
+step that noticed set a `kedro.warning` tag on its own MLflow run, and subscribe the job to
+`warning` and `recovered`:
+
+```python
+import mlflow
+
+# Entries are table:reason:last_data, joined by ";". The reason is free text, such as
+# empty or stale; last_data is an ISO 8601 instant or "unknown".
+mlflow.set_tag("kedro.warning", "actual_system_conditions:empty:2026-09-30T08:55:00+00:00")
+```
+
+```yaml
+notifications:
+  alerts:
+    token_env: SLACK_BOT_TOKEN
+    channel: C0123456789
+    events: [failure, warning, recovered]
+    warning_repeat_hours: 24
+```
+
+The leaf step reads the tag from every step of the job, not only the leaves, and compares
+the job with its previous finished run:
+
+- The first degraded run posts a `warning`. Through the Slack API it opens a new thread.
+- Later degraded runs post nothing, unless a table is new to the outage (a `warning` at
+  once) or `warning_repeat_hours` have passed since the last message (a reminder). Times are
+  run start times, and a run up to `warning_repeat_tolerance_minutes` early still reminds.
+- The first clean run posts `recovered`, naming when the outage started.
+- Reminders, re-warnings and `recovered` reply in the first warning's thread. The webhook
+  cannot thread, so it posts them as separate messages.
+- A failed run changes nothing: the next finished run is compared with the last finished
+  run before it.
+
+The outage state is written as `kedro.*` tags on the job's root run (`kedro.job_name`,
+`kedro.notify_state` and the outage's start, last message, tables and thread), so it needs
+an `experiment_name`. With `success` also subscribed, a degraded run posts its `warning`
+instead of `success`.
 
 Whether Azure ML cancels a job's remaining steps when one fails depends on the pipeline job's `continue_on_step_failure` setting, which the plugin does not set. Either way each raising step posts its own `failure`, so two steps failing at the same moment produce two messages.
 

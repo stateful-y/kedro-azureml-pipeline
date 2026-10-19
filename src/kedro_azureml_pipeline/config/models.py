@@ -428,7 +428,7 @@ class PipelineFilterOptions(BaseModel):
         return {k: v for k, v in mapping.items() if v is not None}
 
 
-NotificationEventName = Literal["start", "success", "failure"]
+NotificationEventName = Literal["start", "success", "failure", "warning", "recovered"]
 
 
 class NotificationConfig(BaseModel):
@@ -458,9 +458,12 @@ class NotificationConfig(BaseModel):
         bot token. Requires ``channel``.
     channel : str or None
         Slack channel ID the API posts to. Requires ``token_env``.
-    events : list of {"start", "success", "failure"}
+    events : list of {"start", "success", "failure", "warning", "recovered"}
         Events to report. At least one. (Named ``events`` rather than ``on``
         because YAML 1.1 reads a bare ``on`` key as the boolean true.)
+        ``warning`` reports a job that finished with a step marked degraded (a
+        ``kedro.warning`` tag on its MLflow run), and ``recovered`` its first clean
+        run after one; both compare each run with the job's previous completed run.
     payload : str or None
         ``module.path:function_name`` reference to a payload builder. It is
         called with a [NotificationEvent][kedro_azureml_pipeline.hooks.NotificationEvent]
@@ -470,6 +473,12 @@ class NotificationConfig(BaseModel):
         Seconds the designated leaf step waits for its sibling leaves before
         posting an outcome-unknown message instead of ``success``. Must be
         below the job's ``limits.timeout`` when one is declared.
+    warning_repeat_hours : int
+        While a job stays degraded, hours between reminders of the same outage,
+        measured between run start times.
+    warning_repeat_tolerance_minutes : int
+        How many minutes early a reminder may come, so a run starting slightly
+        before the interval is up does not push the reminder to the next run.
 
     Examples
     --------
@@ -515,6 +524,10 @@ class NotificationConfig(BaseModel):
         default=1800,
         ge=1,
         description="Seconds the outcome step waits for sibling leaves before posting outcome-unknown.",
+    )
+    warning_repeat_hours: int = Field(default=24, ge=1, description="Hours between reminders of an ongoing outage.")
+    warning_repeat_tolerance_minutes: int = Field(
+        default=15, ge=0, description="Minutes early a reminder may come, measured between run start times."
     )
 
     @field_validator("payload")

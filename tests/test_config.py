@@ -434,8 +434,20 @@ class TestNotificationConfig:
             NotificationConfig(webhook_env="X", events=["start"], payload=payload)
 
     def test_invalid_event_rejected(self):
-        with pytest.raises(ValidationError, match="'start', 'success' or 'failure'"):
+        with pytest.raises(ValidationError, match="'start', 'success', 'failure', 'warning' or 'recovered'"):
             NotificationConfig(webhook_env="X", events=["bogus"])
+
+    def test_warning_and_recovered_events_parse_with_their_defaults(self):
+        cfg = NotificationConfig(webhook_env="X", events=["failure", "warning", "recovered"])
+        assert cfg.events == ["failure", "warning", "recovered"]
+        assert (cfg.warning_repeat_hours, cfg.warning_repeat_tolerance_minutes) == (24, 15)
+
+    @pytest.mark.parametrize(
+        ("field", "value"), [("warning_repeat_hours", 0), ("warning_repeat_tolerance_minutes", -1)]
+    )
+    def test_out_of_range_repeat_settings_are_refused(self, field, value):
+        with pytest.raises(ValidationError, match=field):
+            NotificationConfig(webhook_env="X", events=["warning"], **{field: value})
 
     def test_empty_events_rejected(self):
         with pytest.raises(ValidationError, match="at least 1"):

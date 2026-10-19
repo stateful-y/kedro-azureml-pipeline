@@ -16,6 +16,13 @@ timestamp is written as a tag on the job's root MLflow run, and the outcome
 messages of the same run reply in that thread while also being sent to the
 channel. Messages posted through the API carry the app's own name and icon
 and no "Added by" label, which a webhook attachment always shows.
+
+A step that served its output with a missing or stale input marks its own MLflow run
+with a ``kedro.warning`` tag. When ``warning`` or ``recovered`` is subscribed, the poster
+reads the tag from every step of the job, compares the job with its previous completed
+run, and posts a ``warning`` when an outage starts, a reminder when it lasts, and
+``recovered`` when it ends. The outage's state is written on the job's root run, and its
+follow-up messages reply in the thread of its first warning.
 """
 
 from __future__ import annotations
@@ -50,6 +57,19 @@ ROOT_RUN_TAG = "mlflow.rootRunId"
 NODE_NAME_TAG = "kedro.node_name"
 ERROR_TAG = "kedro.error"
 THREAD_TAG = "kedro.notify_thread"
+# The degraded marking a step writes: ``table:reason:last_data`` entries joined by ``;``.
+WARNING_TAG = "kedro.warning"
+# The outage state the poster writes on the job's root run. Plain names: Azure ML's
+# MLflow store refuses a backticked key and a key containing a filter keyword.
+JOB_NAME_TAG = "kedro.job_name"
+STATE_TAG = "kedro.notify_state"
+DEGRADED_SINCE_TAG = "kedro.notify_degraded_since"
+LAST_POST_TAG = "kedro.notify_last_post_run_start"
+WARNING_TABLES_TAG = "kedro.notify_warning_tables"
+OUTAGE_THREAD_TAG = "kedro.notify_outage_thread"
+CLEAN = "clean"
+DEGRADED = "degraded"
+PREVIOUS_RUNS_SCANNED = 50
 SLACK_POST_MESSAGE_URL = "https://slack.com/api/chat.postMessage"
 _IDENTIFIER_VARS = (
     "AZUREML_RUN_ID",
@@ -67,8 +87,8 @@ class NotificationEvent:
     Parameters
     ----------
     event : str
-        ``"start"``, ``"success"``, ``"failure"``, or ``"unknown"`` when the
-        poster gave up waiting for its siblings.
+        ``"start"``, ``"success"``, ``"failure"``, ``"warning"``, ``"recovered"``, or
+        ``"unknown"`` when the poster gave up waiting for its siblings.
     job_name : str
         Name of the job in ``azureml.yml``.
     display_name : str
@@ -91,6 +111,13 @@ class NotificationEvent:
         Seconds since the step's pipeline started, for outcome events.
     environment : Mapping of str to str
         Raw Azure ML identifiers present in the step environment.
+    warnings : tuple of str
+        For ``warning``, the job's ``kedro.warning`` entries, ``table:reason:last_data``.
+    degraded_since : str or None
+        For ``warning`` and ``recovered``, when the outage's first degraded run started,
+        as an ISO 8601 UTC instant.
+    reminder : bool
+        For ``warning``, whether it repeats an outage already reported.
 
     See Also
     --------
@@ -109,6 +136,140 @@ class NotificationEvent:
     studio_url: str | None = None
     elapsed_seconds: float | None = None
     environment: Mapping[str, str] = field(default_factory=dict)
+    warnings: tuple[str, ...] = ()
+    degraded_since: str | None = None
+    reminder: bool = False
+
+
+@dataclass(frozen=True)
+class OutageDecision:
+    """What the poster does about a job's degraded state, and the state it writes.
+
+    Parameters
+    ----------
+    post : str or None
+        ``"warning"``, ``"recovered"``, or ``None`` to post nothing.
+    reminder : bool
+        The warning repeats an outage already reported.
+    thread : str or None
+        The outage's thread to reply in, or ``None`` to post a new top-level message.
+    state : dict of str to str
+        The tags to write on the current root run.
+
+    See Also
+    --------
+    [decide_outage][kedro_azureml_pipeline.hooks.notify.decide_outage] : Makes the decision.
+    """
+
+    post: str | None
+    reminder: bool = False
+    thread: str | None = None
+    state: dict[str, str] = field(default_factory=dict)
+
+
+def warning_tables(entries: tuple[str, ...]) -> tuple[str, ...]:
+    """Return the table names of ``kedro.warning`` entries, sorted and unique.
+
+    Parameters
+    ----------
+    entries : tuple of str
+        ``table:reason:last_data`` entries.
+
+    Returns
+    -------
+    tuple of str
+        The tables.
+    """
+    return tuple(sorted({entry.split(":", 1)[0] for entry in entries if entry.split(":", 1)[0]}))
+
+
+def decide_outage(
+    previous: Mapping[str, str] | None,
+    entries: tuple[str, ...],
+    run_start_ms: int,
+    *,
+    repeat_ms: int,
+    tolerance_ms: int,
+) -> OutageDecision:
+    """Decide the message and the state for a completed run, from its previous completed run.
+
+    =================  =======================  ===============================================
+    previous           this run clean           this run degraded
+    =================  =======================  ===============================================
+    none or clean      nothing                  ``warning``, starting the outage
+    degraded           ``recovered``            ``warning`` if a table is new to the outage;
+                                                a reminder once ``repeat - tolerance`` has
+                                                passed since the run that last posted; else
+                                                nothing
+    =================  =======================  ===============================================
+
+    Times are run start times, so the reminder does not drift with how long a run waits
+    before posting. Tables accumulate over the outage, so a table that flaps does not warn
+    again on its own.
+
+    Parameters
+    ----------
+    previous : Mapping of str to str or None
+        The previous completed run's tags, or ``None`` when there is none.
+    entries : tuple of str
+        This run's ``kedro.warning`` entries; empty for a clean run.
+    run_start_ms : int
+        This run's start, in epoch milliseconds.
+    repeat_ms : int
+        The reminder interval, in milliseconds.
+    tolerance_ms : int
+        How much earlier than the interval a reminder may come, in milliseconds.
+
+    Returns
+    -------
+    OutageDecision
+        What to post, where, and the state to write.
+    """
+    was_degraded = previous is not None and previous.get(STATE_TAG) == DEGRADED
+    tables = warning_tables(entries)
+    if not tables:
+        if was_degraded:
+            return OutageDecision(
+                "recovered",
+                thread=previous.get(OUTAGE_THREAD_TAG) or None,
+                state={STATE_TAG: CLEAN, DEGRADED_SINCE_TAG: previous.get(DEGRADED_SINCE_TAG, "")},
+            )
+        return OutageDecision(None, state={STATE_TAG: CLEAN})
+    if not was_degraded:
+        state = {
+            STATE_TAG: DEGRADED,
+            DEGRADED_SINCE_TAG: str(run_start_ms),
+            LAST_POST_TAG: str(run_start_ms),
+            WARNING_TABLES_TAG: ",".join(tables),
+        }
+        return OutageDecision("warning", state=state)
+    known = set(filter(None, previous.get(WARNING_TABLES_TAG, "").split(",")))
+    last_post = int(previous.get(LAST_POST_TAG) or 0)
+    thread = previous.get(OUTAGE_THREAD_TAG) or None
+    state = {
+        STATE_TAG: DEGRADED,
+        DEGRADED_SINCE_TAG: previous.get(DEGRADED_SINCE_TAG) or str(run_start_ms),
+        LAST_POST_TAG: str(last_post),
+        WARNING_TABLES_TAG: ",".join(sorted(known | set(tables))),
+    }
+    if thread:
+        state[OUTAGE_THREAD_TAG] = thread
+    if set(tables) - known:
+        return OutageDecision("warning", thread=thread, state={**state, LAST_POST_TAG: str(run_start_ms)})
+    if run_start_ms - last_post >= repeat_ms - tolerance_ms:
+        return OutageDecision(
+            "warning", reminder=True, thread=thread, state={**state, LAST_POST_TAG: str(run_start_ms)}
+        )
+    return OutageDecision(None, state=state)
+
+
+def _iso_from_ms(value: str | None) -> str | None:
+    """An epoch-millisecond tag value as an ISO 8601 UTC instant, or ``None``."""
+    if not value:
+        return None
+    from datetime import UTC, datetime
+
+    return datetime.fromtimestamp(int(value) / 1000, UTC).isoformat()
 
 
 @dataclass(frozen=True)
@@ -182,6 +343,11 @@ def default_payload(event: NotificationEvent) -> dict[str, Any]:
         text = f"[success] {where} finished{_elapsed(event)}."
     elif event.event == "failure":
         text = f"[failure] {where} failed in node {event.node}{_elapsed(event)}: {event.error}"
+    elif event.event == "warning":
+        label = "[warning] reminder:" if event.reminder else "[warning]"
+        text = f"{label} {where} ran degraded since {event.degraded_since}: {'; '.join(event.warnings)}"
+    elif event.event == "recovered":
+        text = f"[recovered] {where} is no longer degraded (since {event.degraded_since})."
     else:
         text = f"[unknown] {where}: outcome unknown{_elapsed(event)}. Still pending: {event.error}"
     link = event.studio_url or event.root_run_id
@@ -284,12 +450,14 @@ class NotificationHook:
         definition = self._definition()
         if definition is None or os.environ.get(KEDRO_AZUREML_NOTIFY_OUTCOME) != "1":
             return
-        if "success" not in definition["events"] and "failure" not in definition["events"]:
+        events = set(definition["events"])
+        if not events & {"success", "failure", "warning", "recovered"}:
             return
         siblings = tuple(name for name in os.environ.get(KEDRO_AZUREML_NOTIFY_SIBLINGS, "").split(",") if name)
         outcome = self._await_siblings(siblings, int(definition["wait_timeout"]))
         if outcome.finished:
-            if "success" in definition["events"]:
+            degraded = self._report_outage(definition) if events & {"warning", "recovered"} else False
+            if "success" in events and not (degraded and "warning" in events):
                 self._post(definition, self._event(definition, "success"))
             return
         if outcome.pending:
@@ -308,6 +476,107 @@ class NotificationHook:
                     error="step ended without reporting (killed or cancelled)",
                 ),
             )
+
+    def _report_outage(self, definition: dict[str, Any]) -> bool:
+        """Post ``warning`` or ``recovered`` for a finished job and write its outage state.
+
+        Reads ``kedro.warning`` from every step run of the job, not only the leaves, finds
+        the job's previous completed run by its ``kedro.job_name`` tag, applies
+        [decide_outage][kedro_azureml_pipeline.hooks.notify.decide_outage], and writes
+        the state on the current root run. A lookup that fails counts as no history, so it
+        errs toward a warning. Never raises.
+
+        Parameters
+        ----------
+        definition : dict of str to Any
+            The stamped definition.
+
+        Returns
+        -------
+        bool
+            Whether the job ran degraded.
+        """
+        try:
+            import mlflow
+        except ImportError:
+            logger.warning("kedro-azureml-pipeline: mlflow is not installed; not reporting degraded runs")
+            return False
+        client = mlflow.MlflowClient()
+        root_run_id = os.environ.get("AZUREML_ROOT_RUN_ID", "")
+        experiment = self._experiment(client)
+        if experiment is None or not root_run_id:
+            logger.warning("kedro-azureml-pipeline: no experiment or root run; not reporting degraded runs")
+            return False
+        try:
+            steps = client.search_runs(
+                [experiment.experiment_id], filter_string=f"tags.{ROOT_RUN_TAG} = '{root_run_id}'"
+            )
+            entries = tuple(
+                sorted({
+                    entry
+                    for run in steps
+                    for entry in (run.data.tags.get(WARNING_TAG) or "").split(";")
+                    if entry.strip()
+                })
+            )
+            run_start_ms = int(client.get_run(root_run_id).info.start_time)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("kedro-azureml-pipeline: could not read the job's degraded marks: %s", type(exc).__name__)
+            return False
+        previous = self._previous_run_tags(client, experiment.experiment_id, definition["job_name"], root_run_id)
+        decision = decide_outage(
+            previous,
+            entries,
+            run_start_ms,
+            repeat_ms=int(definition.get("warning_repeat_hours", 24)) * 3_600_000,
+            tolerance_ms=int(definition.get("warning_repeat_tolerance_minutes", 15)) * 60_000,
+        )
+        state = {JOB_NAME_TAG: definition["job_name"], **decision.state}
+        if decision.post is not None and decision.post in definition["events"]:
+            event = self._event(
+                definition,
+                decision.post,
+                warnings=entries,
+                degraded_since=_iso_from_ms(decision.state.get(DEGRADED_SINCE_TAG)),
+                reminder=decision.reminder,
+            )
+            posted_ts = self._post(definition, event, thread_ts=decision.thread, outage=True)
+            if decision.post == "warning" and decision.thread is None and posted_ts:
+                state[OUTAGE_THREAD_TAG] = posted_ts
+        for key, value in state.items():
+            try:
+                client.set_tag(root_run_id, key, value)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("kedro-azureml-pipeline: could not record %s: %s", key, type(exc).__name__)
+        return bool(entries)
+
+    @staticmethod
+    def _previous_run_tags(client: Any, experiment_id: str, job_name: str, root_run_id: str) -> dict[str, str] | None:
+        """Return the tags of the job's newest other root run that recorded an outage state, or ``None``.
+
+        Failed runs never record one, so they are skipped. A lookup that fails is logged and
+        counts as no history.
+        """
+        try:
+            runs = client.search_runs(
+                [experiment_id],
+                filter_string=f"tags.{JOB_NAME_TAG} = '{job_name}'",
+                order_by=["attributes.start_time DESC"],
+                max_results=PREVIOUS_RUNS_SCANNED,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("kedro-azureml-pipeline: could not read the job's previous run: %s", type(exc).__name__)
+            return None
+        for run in runs:
+            if run.info.run_id != root_run_id and STATE_TAG in run.data.tags:
+                return dict(run.data.tags)
+        return None
+
+    @staticmethod
+    def _experiment(client: Any) -> Any:
+        """Return the job's MLflow experiment, from the step environment, or ``None``."""
+        name = os.environ.get("MLFLOW_EXPERIMENT_NAME") or os.environ.get(KEDRO_AZUREML_MLFLOW_EXPERIMENT_NAME)
+        return client.get_experiment_by_name(name) if name else None
 
     def _await_siblings(self, siblings: tuple[str, ...], wait_timeout: int) -> SiblingOutcome:
         """Poll MLflow until every sibling leaf run is terminal or the cap expires.
@@ -338,10 +607,7 @@ class NotificationHook:
             )
             return SiblingOutcome(finished=True)
         client = mlflow.MlflowClient()
-        experiment_name = os.environ.get("MLFLOW_EXPERIMENT_NAME") or os.environ.get(
-            KEDRO_AZUREML_MLFLOW_EXPERIMENT_NAME
-        )
-        experiment = client.get_experiment_by_name(experiment_name) if experiment_name else None
+        experiment = self._experiment(client)
         root_run_id = os.environ.get("AZUREML_ROOT_RUN_ID", "")
         pending = set(siblings)
         reported: list[str] = []
@@ -406,7 +672,14 @@ class NotificationHook:
             **extra,
         )
 
-    def _post(self, definition: dict[str, Any], event: NotificationEvent) -> None:
+    def _post(
+        self,
+        definition: dict[str, Any],
+        event: NotificationEvent,
+        *,
+        thread_ts: str | None = None,
+        outage: bool = False,
+    ) -> str | None:
         """Render *event* and send it through the configured transport, swallowing every error.
 
         The Slack API is used when the definition names ``token_env`` and the
@@ -419,12 +692,20 @@ class NotificationHook:
             The stamped definition naming the transport variables and the builder.
         event : NotificationEvent
             The event to send.
+        thread_ts : str or None, default: None
+            With *outage*, the outage thread to reply in; ``None`` posts at top level.
+        outage : bool, default: False
+            Thread by the outage instead of by the run's ``start`` message.
+
+        Returns
+        -------
+        str or None
+            The Slack timestamp of the posted message, through the Slack API only.
         """
         token_env = definition.get("token_env")
         token = os.environ.get(token_env) if token_env else None
         if token:
-            self._post_api(definition, event, token)
-            return
+            return self._post_api(definition, event, token, thread_ts=thread_ts, outage=outage)
         webhook_env = definition.get("webhook_env")
         url = os.environ.get(webhook_env) if webhook_env else None
         if not url:
@@ -433,20 +714,32 @@ class NotificationHook:
                 webhook_env or token_env,
                 event.event,
             )
-            return
+            return None
         if not url.startswith(("https://", "http://")):
             logger.warning(
                 "kedro-azureml-pipeline: %s is not an http(s) URL; not posting the '%s' notification",
                 webhook_env,
                 event.event,
             )
-            return
+            return None
         payload = self._render(definition.get("payload"), event)
         if self._send(url, dict(payload), {}, event) is not None:
             logger.info("kedro-azureml-pipeline: posted the '%s' notification for job %s", event.event, event.job_name)
+        return None
 
-    def _post_api(self, definition: dict[str, Any], event: NotificationEvent, token: str) -> None:
+    def _post_api(
+        self,
+        definition: dict[str, Any],
+        event: NotificationEvent,
+        token: str,
+        *,
+        thread_ts: str | None = None,
+        outage: bool = False,
+    ) -> str | None:
         """Post *event* with ``chat.postMessage``, threading outcomes under the run's ``start``.
+
+        An outage message threads under the outage's first warning instead, and the first
+        warning itself posts at top level, since a Slack thread needs a top-level parent.
 
         Parameters
         ----------
@@ -456,24 +749,33 @@ class NotificationHook:
             The event to send.
         token : str
             The bot token; sent as a bearer header and never logged.
+        thread_ts : str or None, default: None
+            With *outage*, the outage thread to reply in.
+        outage : bool, default: False
+            Thread by the outage instead of by the run's ``start`` message.
+
+        Returns
+        -------
+        str or None
+            The posted message's timestamp, or ``None`` when it was not posted.
         """
         body = {"channel": definition["channel"], **self._render(definition.get("payload"), event)}
-        if event.event != "start":
-            thread_ts = self._thread_ts(event.root_run_id)
-            if thread_ts:
-                body["thread_ts"] = thread_ts
-                body["reply_broadcast"] = True
+        reply_to = thread_ts if outage else (None if event.event == "start" else self._thread_ts(event.root_run_id))
+        if reply_to:
+            body["thread_ts"] = reply_to
+            body["reply_broadcast"] = True
         response = self._send(SLACK_POST_MESSAGE_URL, body, {"Authorization": f"Bearer {token}"}, event)
         if response is None:
-            return
+            return None
         if not response.get("ok"):
             logger.warning(
                 "kedro-azureml-pipeline: Slack refused the '%s' notification: %s", event.event, response.get("error")
             )
-            return
+            return None
         logger.info("kedro-azureml-pipeline: posted the '%s' notification for job %s", event.event, event.job_name)
         if event.event == "start" and response.get("ts"):
             self._record_thread(event.root_run_id, str(response["ts"]))
+        return str(response["ts"]) if response.get("ts") else None
 
     @staticmethod
     def _send(

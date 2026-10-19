@@ -180,9 +180,11 @@ notifications:
 | `webhook_env` | `null` | Name of the environment variable, inside the step, that holds the webhook URL. The URL itself never appears in configuration |
 | `token_env` | `null` | Name of the environment variable, inside the step, that holds the Slack bot token. Set together with `channel` |
 | `channel` | `null` | Slack channel ID the API posts to. Set together with `token_env` |
-| `events` | required | Events to report: any non-empty subset of `start`, `success`, `failure` |
+| `events` | required | Events to report: any non-empty subset of `start`, `success`, `failure`, `warning`, `recovered` |
 | `payload` | `null` | `module.path:function_name` reference to a payload builder called with a [`NotificationEvent`][kedro_azureml_pipeline.hooks.NotificationEvent]; `null` posts a plain `{"text": ...}` payload |
 | `wait_timeout` | `1800` | Seconds the outcome step waits for the job's other leaf steps before posting an outcome-unknown message instead of `success` |
+| `warning_repeat_hours` | `24` | While a job stays degraded, hours between reminders of the same outage, measured between run start times |
+| `warning_repeat_tolerance_minutes` | `15` | How many minutes early a reminder may come |
 
 The field is named `events` rather than `on` because YAML 1.1 reads a bare `on` key as the boolean true.
 

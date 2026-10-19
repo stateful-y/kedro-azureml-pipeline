@@ -56,6 +56,15 @@ The one-step-per-node model has a second consequence: Kedro's `before_pipeline_r
 
 That wait is why the feature leans on [`MlflowAzureMLHook`][kedro_azureml_pipeline.hooks.MlflowAzureMLHook]: the sibling runs are found by the `kedro.node_name` tag it writes, and a sibling that failed without running its own error hook is recognised by the missing `kedro.error` tag. The hook is inert whenever `KEDRO_AZUREML_NOTIFY` is absent, which is every local run. See [Notify on run outcomes](../how-to/notify-on-run-outcomes.md) for the setup.
 
+`warning` and `recovered` need one more thing no single run holds: memory of the job's
+previous runs. The poster keeps it on MLflow too. It reads the `kedro.warning` tags of every
+step run under the root run, finds the job's previous finished root run by its
+`kedro.job_name` tag (newest first, skipping failed runs, which never record a state), and
+writes the outage state back on the current root run. Only finished runs write a state, so
+a failure in the middle of an outage neither ends it nor resets its reminder clock. Azure
+ML's MLflow store refuses a backticked tag key and a key containing a filter keyword, which
+is why these tags have plain names.
+
 ## Writing hooks that work in both contexts
 
 If you are writing a custom hook that needs to behave differently during local and remote runs, the simplest approach is to check the runner type in `before_pipeline_run`:
