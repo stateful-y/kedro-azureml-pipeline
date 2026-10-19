@@ -604,3 +604,237 @@ class TestHelpers:
 
     def test_sibling_outcome_defaults(self):
         assert SiblingOutcome(finished=True) == SiblingOutcome(True, (), (), ())
+
+
+from kedro_azureml_pipeline.hooks.notify import (  # noqa: E402
+    DEGRADED_SINCE_TAG,
+    JOB_NAME_TAG,
+    LAST_POST_TAG,
+    OUTAGE_THREAD_TAG,
+    STATE_TAG,
+    WARNING_TABLES_TAG,
+    decide_outage,
+    warning_tables,
+)
+
+HOUR_MS = 3_600_000
+REPEAT = {"repeat_ms": 24 * HOUR_MS, "tolerance_ms": 15 * 60_000}
+EMPTY = "actual_system_conditions:empty:2026-09-30T08:55:00+00:00"
+STALE = "actual_gas_price:stale:2026-10-01T00:00:00+00:00"
+
+
+def _degraded(since=0, last_post=0, tables="actual_system_conditions", thread="100.1"):
+    return {
+        STATE_TAG: "degraded",
+        DEGRADED_SINCE_TAG: str(since),
+        LAST_POST_TAG: str(last_post),
+        WARNING_TABLES_TAG: tables,
+        OUTAGE_THREAD_TAG: thread,
+    }
+
+
+class TestDecideOutage:
+    """Every cell of the decision table, on run start times."""
+
+    def test_a_clean_run_with_no_history_posts_nothing(self):
+        decision = decide_outage(None, (), 0, **REPEAT)
+        assert (decision.post, decision.state) == (None, {STATE_TAG: "clean"})
+
+    def test_the_first_degraded_run_warns_and_starts_the_outage(self):
+        decision = decide_outage({STATE_TAG: "clean"}, (EMPTY,), 9 * HOUR_MS, **REPEAT)
+        assert (decision.post, decision.reminder, decision.thread) == ("warning", False, None)
+        assert decision.state[DEGRADED_SINCE_TAG] == str(9 * HOUR_MS)
+        assert decision.state[WARNING_TABLES_TAG] == "actual_system_conditions"
+
+    def test_a_degraded_run_within_the_interval_posts_nothing(self):
+        decision = decide_outage(_degraded(), (EMPTY,), 5 * HOUR_MS, **REPEAT)
+        assert decision.post is None
+        assert decision.state[LAST_POST_TAG] == "0"
+        assert decision.state[OUTAGE_THREAD_TAG] == "100.1"
+
+    def test_a_run_slightly_early_inside_the_tolerance_reminds(self):
+        decision = decide_outage(_degraded(), (EMPTY,), 24 * HOUR_MS - 2 * 60_000, **REPEAT)
+        assert (decision.post, decision.reminder, decision.thread) == ("warning", True, "100.1")
+        assert decision.state[LAST_POST_TAG] == str(24 * HOUR_MS - 2 * 60_000)
+
+    def test_a_table_new_to_the_outage_warns_at_once(self):
+        decision = decide_outage(_degraded(), (EMPTY, STALE), 4 * HOUR_MS, **REPEAT)
+        assert (decision.post, decision.reminder) == ("warning", False)
+        assert decision.state[WARNING_TABLES_TAG] == "actual_gas_price,actual_system_conditions"
+
+    def test_a_flapping_table_does_not_warn_again(self):
+        previous = _degraded(tables="actual_gas_price,actual_system_conditions")
+        assert decide_outage(previous, (EMPTY, STALE), 6 * HOUR_MS, **REPEAT).post is None
+
+    def test_a_clean_run_after_an_outage_recovers_in_its_thread(self):
+        decision = decide_outage(_degraded(since=7), (), 30 * HOUR_MS, **REPEAT)
+        assert (decision.post, decision.thread) == ("recovered", "100.1")
+        assert decision.state == {STATE_TAG: "clean", DEGRADED_SINCE_TAG: "7"}
+
+    def test_an_outage_without_a_thread_keeps_none(self):
+        decision = decide_outage(_degraded(thread=""), (EMPTY,), 25 * HOUR_MS, **REPEAT)
+        assert (decision.post, decision.thread) == ("warning", None)
+        assert OUTAGE_THREAD_TAG not in decision.state
+
+    def test_a_missing_start_has_no_instant(self):
+        from kedro_azureml_pipeline.hooks.notify import _iso_from_ms
+
+        assert _iso_from_ms(None) is None
+        assert _iso_from_ms("") is None
+
+    def test_tables_are_read_from_entries(self):
+        assert warning_tables((EMPTY, STALE, EMPTY, ":broken")) == ("actual_gas_price", "actual_system_conditions")
+
+
+def _root(run_id, tags=None, start=0):
+    return SimpleNamespace(
+        data=SimpleNamespace(tags=dict(tags or {})), info=SimpleNamespace(run_id=run_id, start_time=start)
+    )
+
+
+def outage_mlflow(steps, previous=(), *, start=48 * HOUR_MS, fail=None):
+    """An ``mlflow`` module serving the job's step runs, its previous runs, and the root's start."""
+    mock = MagicMock()
+    client = mock.MlflowClient.return_value
+    client.get_experiment_by_name.return_value = SimpleNamespace(experiment_id="exp-1")
+    tags: dict[str, dict[str, str]] = {}
+
+    def search(_ids, filter_string="", **kwargs):
+        if fail and fail in filter_string:
+            raise RuntimeError("search refused")
+        return list(previous) if JOB_NAME_TAG in filter_string else list(steps)
+
+    def set_tag(run_id, key, value):
+        if fail == "set_tag":
+            raise RuntimeError("tag refused")
+        tags.setdefault(run_id, {})[key] = value
+
+    client.search_runs.side_effect = search
+    client.get_run.side_effect = lambda run_id: _root(run_id, tags.get(run_id), start)
+    client.set_tag.side_effect = set_tag
+    mock.tags = tags
+    return mock
+
+
+def _step(name, warning=None):
+    tags = {"kedro.node_name": name}
+    if warning:
+        tags["kedro.warning"] = warning
+    return SimpleNamespace(data=SimpleNamespace(tags=tags), info=SimpleNamespace(status="FINISHED"))
+
+
+OUTAGE_EVENTS = ("failure", "warning", "recovered")
+
+
+class TestOutageReporting:
+    """The poster reports degraded runs from every step and keeps the outage state."""
+
+    def _run(self, hook, mlflow, **stamp_kwargs):
+        stamp(events=stamp_kwargs.pop("events", OUTAGE_EVENTS), poster=True, **stamp_kwargs)
+        os.environ["MLFLOW_EXPERIMENT_NAME"] = "exp"
+        with patch.dict("sys.modules", {"mlflow": mlflow}):
+            hook.after_pipeline_run()
+
+    def test_a_warning_on_a_non_leaf_step_starts_an_outage_thread(self, hook, urlopen):
+        urlopen.reply = b'{"ok": true, "ts": "200.5"}'
+        mlflow = outage_mlflow([_step("prepare", EMPTY), _step("prune")])
+        self._run(hook, mlflow, api=True)
+
+        (_, body, _) = urlopen[0]
+        assert body["text"].startswith("[warning] Job A")
+        assert "actual_system_conditions:empty" in body["text"]
+        assert "thread_ts" not in body
+        assert mlflow.tags["root-1"][OUTAGE_THREAD_TAG] == "200.5"
+        assert mlflow.tags["root-1"][JOB_NAME_TAG] == "job-a"
+        assert mlflow.tags["root-1"][STATE_TAG] == "degraded"
+
+    def test_a_reminder_replies_in_the_outage_thread(self, hook, urlopen):
+        urlopen.reply = b'{"ok": true, "ts": "300.1"}'
+        previous = [_root("root-1"), _root("root-0", _degraded(since=0, thread="200.5"))]
+        self._run(hook, outage_mlflow([_step("prepare", EMPTY)], previous, start=24 * HOUR_MS), api=True)
+
+        (_, body, _) = urlopen[0]
+        assert body["text"].startswith("[warning] reminder: Job A")
+        assert (body["thread_ts"], body["reply_broadcast"]) == ("200.5", True)
+
+    def test_recovery_replies_in_the_outage_thread(self, hook, urlopen):
+        urlopen.reply = b'{"ok": true, "ts": "400.1"}'
+        previous = [_root("root-0", _degraded(since=0, thread="200.5"))]
+        mlflow = outage_mlflow([_step("prepare"), _step("prune")], previous)
+        self._run(hook, mlflow, api=True)
+
+        (_, body, _) = urlopen[0]
+        assert body["text"].startswith(
+            "[recovered] Job A (pipeline training, env prod) is no longer degraded (since 1970-01-01T00:00:00+00:00)"
+        )
+        assert body["thread_ts"] == "200.5"
+        assert mlflow.tags["root-1"][STATE_TAG] == "clean"
+
+    def test_a_quiet_degraded_run_posts_nothing_and_keeps_the_state(self, hook, urlopen):
+        previous = [_root("root-0", _degraded(since=0))]
+        mlflow = outage_mlflow([_step("prepare", EMPTY)], previous, start=2 * HOUR_MS)
+        self._run(hook, mlflow)
+
+        assert urlopen == []
+        assert mlflow.tags["root-1"][LAST_POST_TAG] == "0"
+
+    def test_the_webhook_posts_a_separate_message(self, hook, urlopen):
+        previous = [_root("root-0", _degraded(since=0, thread="200.5"))]
+        self._run(hook, outage_mlflow([_step("prepare", EMPTY)], previous, start=25 * HOUR_MS))
+
+        (url, body, _) = urlopen[0]
+        assert url == WEBHOOK_URL
+        assert body["text"].startswith("[warning] reminder:")
+
+    def test_a_degraded_run_posts_a_warning_instead_of_success(self, hook, urlopen):
+        self._run(hook, outage_mlflow([_step("prepare", EMPTY)]), events=("success", "warning"))
+
+        assert [body["text"].split()[0] for _, body, _ in urlopen] == ["[warning]"]
+
+    def test_a_clean_run_still_posts_success(self, hook, urlopen):
+        self._run(hook, outage_mlflow([_step("prepare")]), events=("success", "warning"))
+
+        assert [body["text"].split()[0] for _, body, _ in urlopen] == ["[success]"]
+
+    def test_an_unsubscribed_event_is_not_posted_but_the_state_is_kept(self, hook, urlopen):
+        mlflow = outage_mlflow([_step("prepare", EMPTY)])
+        self._run(hook, mlflow, events=("failure", "recovered"))
+
+        assert urlopen == []
+        assert mlflow.tags["root-1"][STATE_TAG] == "degraded"
+
+    def test_a_previous_run_lookup_error_counts_as_no_history(self, hook, urlopen, caplog):
+        self._run(hook, outage_mlflow([_step("prepare", EMPTY)], fail=JOB_NAME_TAG))
+
+        assert urlopen[0][1]["text"].startswith("[warning] Job A")
+        assert "could not read the job's previous run" in caplog.text
+
+    def test_unreadable_degraded_marks_report_nothing(self, hook, urlopen, caplog):
+        self._run(hook, outage_mlflow([], fail="mlflow.rootRunId"))
+
+        assert urlopen == []
+        assert "could not read the job's degraded marks" in caplog.text
+
+    def test_an_unrecordable_state_is_logged(self, hook, urlopen, caplog):
+        self._run(hook, outage_mlflow([_step("prepare", EMPTY)], fail="set_tag"))
+
+        assert urlopen[0][1]["text"].startswith("[warning]")
+        assert "could not record" in caplog.text
+
+    def test_no_root_run_reports_nothing(self, hook, urlopen, caplog):
+        stamp(events=OUTAGE_EVENTS, poster=True)
+        os.environ.pop("AZUREML_ROOT_RUN_ID")
+        os.environ["MLFLOW_EXPERIMENT_NAME"] = "exp"
+        with patch.dict("sys.modules", {"mlflow": outage_mlflow([_step("prepare", EMPTY)])}):
+            hook.after_pipeline_run()
+
+        assert urlopen == []
+        assert "not reporting degraded runs" in caplog.text
+
+    def test_mlflow_not_installed_reports_nothing(self, hook, urlopen, monkeypatch, caplog):
+        stamp(events=OUTAGE_EVENTS, poster=True)
+        monkeypatch.setitem(__import__("sys").modules, "mlflow", None)
+        hook.after_pipeline_run()
+
+        assert urlopen == []
+        assert "not reporting degraded runs" in caplog.text
