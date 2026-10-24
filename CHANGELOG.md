@@ -12,11 +12,11 @@ This **minor release** includes 3 commits.
 
 
 ### Bug Fixes
-- Never automerge into a branch that requires no checks  ([#215](https://github.com/stateful-y/kedro-azureml-pipeline/pull/215)) by @gtauzin
-- Enable auto-merge as the App so the automerge queue drains  ([#219](https://github.com/stateful-y/kedro-azureml-pipeline/pull/219)) by @gtauzin
+- Stop dependency PRs automerging before CI when the branch requires no checks  ([#215](https://github.com/stateful-y/kedro-azureml-pipeline/pull/215)) by @gtauzin
+- Fix automerged dependency PRs leaving later ones stuck behind main  ([#219](https://github.com/stateful-y/kedro-azureml-pipeline/pull/219)) by @gtauzin
 
-### Miscellaneous Tasks
-- Update from template v0.45.0  ([#208](https://github.com/stateful-y/kedro-azureml-pipeline/pull/208)) by @gtauzin
+### Security
+- Sign GitHub Release files with Sigstore (template v0.45.0)  ([#208](https://github.com/stateful-y/kedro-azureml-pipeline/pull/208)) by @gtauzin
 
 ### Contributors
 
