@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.1.0] - 2026-10-24
+
+This **minor release** includes 3 commits.
+
+
+### Bug Fixes
+- Never automerge into a branch that requires no checks  ([#215](https://github.com/stateful-y/kedro-azureml-pipeline/pull/215)) by @gtauzin
+- Enable auto-merge as the App so the automerge queue drains  ([#219](https://github.com/stateful-y/kedro-azureml-pipeline/pull/219)) by @gtauzin
+
+### Miscellaneous Tasks
+- Update from template v0.45.0  ([#208](https://github.com/stateful-y/kedro-azureml-pipeline/pull/208)) by @gtauzin
+
+### Contributors
+
+Thanks to all contributors for this release:
+- @gtauzin
+
 ## [0.1.0-alpha.4] - 2026-10-19
 
 This **minor release** includes 25 commits.
