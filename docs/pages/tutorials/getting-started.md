@@ -48,6 +48,14 @@ Follow the prompts, then install the project dependencies:
     ```bash
     uv add kedro-azureml-pipeline
     ```
+=== "conda"
+    ```bash
+    conda install -c conda-forge kedro-azureml-pipeline
+    ```
+=== "mamba"
+    ```bash
+    mamba install -c conda-forge kedro-azureml-pipeline
+    ```
 
 Let's verify the installation:
 

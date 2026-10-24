@@ -9,6 +9,7 @@
 [![Python Version](https://img.shields.io/pypi/pyversions/kedro-azureml-pipeline)](https://pypi.org/project/kedro-azureml-pipeline/)
 [![License](https://img.shields.io/github/license/stateful-y/kedro-azureml-pipeline)](https://github.com/stateful-y/kedro-azureml-pipeline/blob/main/LICENSE)
 [![PyPI Version](https://img.shields.io/pypi/v/kedro-azureml-pipeline)](https://pypi.org/project/kedro-azureml-pipeline/)
+[![Conda Version](https://img.shields.io/conda/vn/conda-forge/kedro-azureml-pipeline.svg)](https://anaconda.org/conda-forge/kedro-azureml-pipeline)
 [![codecov](https://codecov.io/gh/stateful-y/kedro-azureml-pipeline/branch/main/graph/badge.svg)](https://codecov.io/gh/stateful-y/kedro-azureml-pipeline)
 
 > [!NOTE]
@@ -45,6 +46,12 @@ or with [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uv add kedro-azureml-pipeline
+```
+
+or with `conda` (or `mamba`) from [conda-forge](https://anaconda.org/conda-forge/kedro-azureml-pipeline):
+
+```bash
+conda install -c conda-forge kedro-azureml-pipeline
 ```
 
 ## Quick start
