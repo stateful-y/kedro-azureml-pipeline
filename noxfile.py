@@ -30,6 +30,11 @@ ALL_VERSIONS = ["3.11", "3.12", "3.13"]
 MIN_VERSION = "3.11"
 MAX_VERSION = "3.13"
 PYTHON_VERSIONS = [v for v in ALL_VERSIONS if v >= MIN_VERSION and v <= MAX_VERSION]
+# Every uv session names its interpreter. A session without `python=` runs on
+# whatever nox finds first, which was the runner's system Python until GitHub's
+# ubuntu-latest moved to an image that ships none: uv then picks its newest managed
+# CPython, and a project that caps `requires-python` below it fails `uv sync`
+# before a single test runs. The minimum is what CI installs for these jobs.
 
 # Version specs for matrix testing
 KEDRO_SPECS = [
@@ -230,7 +235,7 @@ def test_versions(session: nox.Session, azureml_spec: str, kedro_spec: str, with
     session.run("pytest", "tests", *session.posargs)
 
 
-@nox.session(venv_backend="uv")
+@nox.session(python=PYTHON_VERSIONS[0], venv_backend="uv")
 def test_docstrings(session: nox.Session) -> None:
     """Run docstring examples with pytest."""
     # Install dependencies
@@ -256,7 +261,7 @@ def test_docstrings(session: nox.Session) -> None:
     )
 
 
-@nox.session(venv_backend="uv")
+@nox.session(python=PYTHON_VERSIONS[0], venv_backend="uv")
 def lint(session: nox.Session) -> None:
     """Run linters and type checkers."""
     # Install dependencies. --locked pins the exact uv.lock versions so this matches CI.
@@ -346,7 +351,7 @@ def build_steps(session: nox.Session) -> None:
     session.run("python", "docs_build/_api_pages.py", external=True)
 
 
-@nox.session(venv_backend="uv")
+@nox.session(python=PYTHON_VERSIONS[0], venv_backend="uv")
 def build_docs(session: nox.Session) -> None:
     """Build the documentation."""
     # Install dependencies
@@ -415,7 +420,7 @@ def check_docs(session: nox.Session) -> None:
     )
 
 
-@nox.session(venv_backend="uv")
+@nox.session(python=PYTHON_VERSIONS[0], venv_backend="uv")
 def serve_docs(session: nox.Session) -> None:
     """Run a development server for working on documentation."""
     # Install dependencies
@@ -434,7 +439,7 @@ def serve_docs(session: nox.Session) -> None:
     session.run("python", "docs_build/serve.py", external=True)
 
 
-@nox.session(venv_backend="uv")
+@nox.session(python=PYTHON_VERSIONS[0], venv_backend="uv")
 def link_docs(session: nox.Session) -> None:
     """Check the built documentation for dead links."""
     site_dir = SITE_DIR
