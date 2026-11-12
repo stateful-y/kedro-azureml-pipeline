@@ -72,7 +72,7 @@ lint = [
     # the `lint-tools` Renovate PR, where any code the new checks need can land with
     # it. The annotation lets Renovate bump this template seed too.
     # renovate: datasource=pypi depName=ty
-    "ty==0.0.99",
+    "ty==0.0.100",
 ]
 docs = [
     # Griffe is imported directly by docs_build/_api_pages.py to discover the package's
@@ -362,15 +362,15 @@ exclude = ["CHANGELOG.md", ".artifacts", ".venv", "openspec"]
 [tool.ty.rules]
 call-non-callable = "warn"
 invalid-assignment = "warn"
-invalid-method-override = "warn"
+incompatible-method-override = "warn"
 invalid-parameter-default = "warn"
 invalid-return-type = "warn"
 invalid-type-form = "warn"
 missing-argument = "warn"
 no-matching-overload = "warn"
 not-subscriptable = "warn"
-unresolved-attribute = "warn"
-unresolved-import = "warn"
+missing-attribute = "warn"
+import-not-found = "warn"
 unsupported-operator = "warn"
 
 [tool.commitizen]
