@@ -362,15 +362,15 @@ exclude = ["CHANGELOG.md", ".artifacts", ".venv", "openspec"]
 [tool.ty.rules]
 call-non-callable = "warn"
 invalid-assignment = "warn"
-invalid-method-override = "warn"
+incompatible-method-override = "warn"
 invalid-parameter-default = "warn"
 invalid-return-type = "warn"
 invalid-type-form = "warn"
 missing-argument = "warn"
 no-matching-overload = "warn"
 not-subscriptable = "warn"
-unresolved-attribute = "warn"
-unresolved-import = "warn"
+missing-attribute = "warn"
+import-not-found = "warn"
 unsupported-operator = "warn"
 
 [tool.commitizen]

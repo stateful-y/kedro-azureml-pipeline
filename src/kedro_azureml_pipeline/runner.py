@@ -147,7 +147,9 @@ class AzurePipelinesRunner(SequentialRunner):
         AbstractDataset
             A ``AzureMLPipelineDataset`` wrapping a pickle backend.
         """
-        return AzureMLPipelineDataset(
+        # Kedro's AbstractDataset.__init_subclass__ aliases the `_load`/`_save` this class
+        # defines onto the abstract `load`/`save` at class creation; ty does not model that.
+        return AzureMLPipelineDataset(  # ty: ignore[abstract-class-instantiation]
             {
                 "type": PickleDataset,
                 "backend": "cloudpickle",
