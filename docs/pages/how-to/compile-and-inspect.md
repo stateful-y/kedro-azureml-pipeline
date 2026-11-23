@@ -57,6 +57,7 @@ Open the generated YAML and check:
 If a node is missing or configured incorrectly:
 
 1. Check the `jobs.<name>.pipeline` filter options in `azureml.yml` (e.g. `tags`, `node_names`, `from_nodes`, `to_nodes`).
+
 2. Verify the node is registered in the Kedro pipeline:
 
     ```bash
