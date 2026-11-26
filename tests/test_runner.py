@@ -228,3 +228,63 @@ class TestDatasetPathAdjustments:
         runner.run(Pipeline([]), catalog)
         # MemoryDataset is not AzureMLPipelineDataset so it has no root_dir to set
         assert catalog["mem_ds"].load() == "hello"
+
+
+class TestDatastoreDatasetInAJob:
+    """The runner points an ``AzureMLDatastoreDataset`` at the mounted folder."""
+
+    @staticmethod
+    def _dataset():
+        from kedro_azureml_pipeline.datasets import AzureMLDatastoreDataset
+
+        return AzureMLDatastoreDataset(
+            datastore="shared_store",
+            datastore_path="ercot/label-name/table_a",
+            dataset={"type": PickleDataset, "backend": "cloudpickle", "filepath": "table_a.pickle"},
+        )
+
+    def test_reads_the_mounted_folder_and_downloads_nothing(self, dummy_pipeline: Pipeline, tmp_path: Path):
+        """With ``--az-input`` the dataset loads from the mount, with no workspace call."""
+        from unittest.mock import patch
+
+        mount = tmp_path / "mount"
+        PickleDataset(filepath=str(mount / "table_a.pickle"), backend="cloudpickle").save(["row"])
+        runner = AzurePipelinesRunner(data_paths={"input_data": str(mount), "i2": str(tmp_path / "i2")})
+        catalog = DataCatalog({"input_data": self._dataset()})
+        with patch(
+            "kedro_azureml_pipeline.datasets.datastore_dataset.artifact_utils.download_artifact_from_aml_uri"
+        ) as download:
+            runner.run(dummy_pipeline.filter(node_names=["node1"]), catalog)
+        download.assert_not_called()
+        assert catalog["input_data"].root_dir == str(mount)
+        assert PickleDataset(filepath=str(tmp_path / "i2" / "i2.pickle"), backend="cloudpickle").load() == ["row"]
+
+    def test_entry_added_after_the_package_hook_still_reads_the_mount(self, dummy_pipeline: Pipeline, tmp_path: Path):
+        """An entry that the package hook never saw loads from the mount."""
+        from kedro_azureml_pipeline.hooks.local_run import AzureMLLocalRunHook
+
+        mount = tmp_path / "mount"
+        PickleDataset(filepath=str(mount / "table_a.pickle"), backend="cloudpickle").save(["row"])
+        from kedro_azureml_pipeline.config import WorkspaceConfig
+
+        hook = AzureMLLocalRunHook()
+        hook.azure_config = WorkspaceConfig(subscription_id="s", resource_group="r", name="w")
+        catalog = DataCatalog()
+        hook.after_catalog_created(catalog)
+        catalog["input_data"] = self._dataset()
+        runner = AzurePipelinesRunner(data_paths={"input_data": str(mount), "i2": str(tmp_path / "i2")})
+        runner.run(dummy_pipeline.filter(node_names=["node1"]), catalog)
+        assert PickleDataset(filepath=str(tmp_path / "i2" / "i2.pickle"), backend="cloudpickle").load() == ["row"]
+
+
+class TestMemoryDatasetInAJob:
+    """The runner leaves a ``MemoryDataset`` entry as it is inside a job."""
+
+    def test_memory_dataset_output_stays_in_memory(self, dummy_pipeline: Pipeline, tmp_path: Path):
+        """An output entry that is a ``MemoryDataset`` keeps its class and its data."""
+        catalog = DataCatalog({"input_data": MemoryDataset(["row"]), "i2": MemoryDataset()})
+        runner = AzurePipelinesRunner(data_paths={"input_data": str(tmp_path), "i2": str(tmp_path / "i2")})
+        runner.run(dummy_pipeline.filter(node_names=["node1"]), catalog)
+        assert isinstance(catalog["i2"], MemoryDataset)
+        assert catalog["i2"].load() == ["row"]
+        assert not (tmp_path / "i2").exists()

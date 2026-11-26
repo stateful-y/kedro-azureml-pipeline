@@ -24,6 +24,7 @@ warnings.filterwarnings("ignore", module="azure.ai.ml")
 if TYPE_CHECKING:
     from kedro_azureml_pipeline.config import KedroAzureMLConfig
     from kedro_azureml_pipeline.datasets.asset_dataset import AzureMLAssetDataset
+    from kedro_azureml_pipeline.datasets.datastore_dataset import AzureMLDatastoreDataset
     from kedro_azureml_pipeline.datasets.pipeline_dataset import AzureMLPipelineDataset
     from kedro_azureml_pipeline.distributed import DistributedNodeConfig, distributed_job
     from kedro_azureml_pipeline.generator import AzureMLPipelineGenerator
@@ -34,6 +35,7 @@ if TYPE_CHECKING:
 #: Public name -> the module that defines it.
 _LAZY_EXPORTS: dict[str, str] = {
     "AzureMLAssetDataset": "kedro_azureml_pipeline.datasets.asset_dataset",
+    "AzureMLDatastoreDataset": "kedro_azureml_pipeline.datasets.datastore_dataset",
     "AzureMLPipelineDataset": "kedro_azureml_pipeline.datasets.pipeline_dataset",
     "AzureMLPipelineGenerator": "kedro_azureml_pipeline.generator",
     "AzurePipelinesRunner": "kedro_azureml_pipeline.runner",
@@ -47,6 +49,7 @@ _LAZY_EXPORTS: dict[str, str] = {
 __all__ = [
     "__version__",
     "AzureMLAssetDataset",
+    "AzureMLDatastoreDataset",
     "AzureMLPipelineDataset",
     "AzureMLPipelineGenerator",
     "AzurePipelinesRunner",
