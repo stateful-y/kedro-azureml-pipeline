@@ -93,6 +93,7 @@ During local runs, [`AzureMLPipelineDataset`][kedro_azureml_pipeline.datasets.Az
 |---|---|
 | Input/output data registered as a versioned asset in Azure ML | [`AzureMLAssetDataset`][kedro_azureml_pipeline.datasets.AzureMLAssetDataset] |
 | Intermediate data passing between pipeline steps | [`AzureMLPipelineDataset`][kedro_azureml_pipeline.datasets.AzureMLPipelineDataset] |
+| Input folder read by its datastore path, with no data asset (for example, a datastore registered in several workspaces) | [`AzureMLDatastoreDataset`][kedro_azureml_pipeline.datasets.AzureMLDatastoreDataset] |
 
 See the [architecture overview](../explanation/architecture.md) for details on how data flows between steps during remote execution.
 

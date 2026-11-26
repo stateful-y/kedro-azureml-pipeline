@@ -20,7 +20,8 @@ class AzureMLDatastoreDataset(AzureMLPipelineDataset):
     The dataset is an input only. In a pipeline job, the generator passes
     ``azureml://datastores/<datastore>/paths/<path>`` as the input of the step, and the
     runner points the dataset at the mounted folder. Outside a job, the first load
-    downloads the folder to ``root_dir`` with the workspace given in ``workspace``.
+    downloads the folder to ``<root_dir>/<datastore>/<datastore_path>`` with the
+    workspace given in ``workspace``, and later loads read that copy.
     No hook of this package is needed, so a catalog entry added after the hooks ran
     works the same way.
 
@@ -35,7 +36,8 @@ class AzureMLDatastoreDataset(AzureMLPipelineDataset):
     workspace : WorkspaceConfig or dict or None, default: None
         Workspace of the datastore. Needed only for a load outside a job.
     root_dir : str, default: "data"
-        Local folder of the download. The runner replaces it with the mounted folder.
+        Local folder that holds the download, under ``<datastore>/<datastore_path>``.
+        The runner replaces it with the mounted folder.
     filepath_arg : str, default: "filepath"
         Argument name on the wrapped dataset that controls the filepath.
     metadata : dict or None, default: None
@@ -86,8 +88,32 @@ class AzureMLDatastoreDataset(AzureMLPipelineDataset):
         """
         return str(self.root_dir) != str(self._local_root_dir)
 
+    @property
+    def _folder(self) -> Path:
+        """Return the folder that holds the datastore files.
+
+        Returns
+        -------
+        Path
+            The mounted folder in a job, else ``<root_dir>/<datastore>/<datastore_path>``.
+        """
+        if self._is_mounted():
+            return Path(self.root_dir)
+        return Path(self.root_dir) / self.datastore / self.datastore_path
+
+    @property
+    def path(self) -> Path:
+        """Return the full path to the underlying dataset file.
+
+        Returns
+        -------
+        Path
+            The underlying filepath inside the datastore folder.
+        """
+        return self._folder / Path(self._dataset_config[self._filepath_arg])
+
     def _download(self) -> None:
-        """Download the folder to ``root_dir``.
+        """Download the folder to ``<root_dir>/<datastore>/<datastore_path>``.
 
         Raises
         ------
@@ -96,11 +122,12 @@ class AzureMLDatastoreDataset(AzureMLPipelineDataset):
         """
         if self.workspace is None:
             raise DatasetError(f"Dataset {self} reads {self.uri} outside a job and has no workspace")
-        logger.info("Downloading %s to %s", self.uri, self.root_dir)
+        logger.info("Downloading %s to %s", self.uri, self._folder)
         with _get_azureml_client(config=self.workspace) as ml_client:
+            # The trailing slash stops a blob prefix match from also taking sibling folders.
             artifact_utils.download_artifact_from_aml_uri(
-                uri=self.uri,
-                destination=str(self.root_dir),
+                uri=f"{self.uri}/",
+                destination=str(self._folder),
                 datastore_operation=ml_client.datastores,
             )
 
@@ -112,7 +139,7 @@ class AzureMLDatastoreDataset(AzureMLPipelineDataset):
         Any
             Loaded data.
         """
-        if not self._is_mounted() and not Path(self.path).exists():
+        if not self._is_mounted() and not self.path.exists():
             self._download()
         return self._construct_dataset().load()
 

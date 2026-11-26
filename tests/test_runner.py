@@ -259,21 +259,34 @@ class TestDatastoreDatasetInAJob:
         assert catalog["input_data"].root_dir == str(mount)
         assert PickleDataset(filepath=str(tmp_path / "i2" / "i2.pickle"), backend="cloudpickle").load() == ["row"]
 
-    def test_entry_added_after_the_package_hook_still_reads_the_mount(self, dummy_pipeline: Pipeline, tmp_path: Path):
-        """An entry that the package hook never saw loads from the mount."""
+    @pytest.mark.parametrize("runner_name", ["kedro_azureml_pipeline.runner.AzurePipelinesRunner", "SequentialRunner"])
+    def test_package_hooks_leave_the_entry_untouched(self, dummy_pipeline: Pipeline, tmp_path: Path, runner_name: str):
+        """The package hooks change nothing on the entry, so it still loads from the mount."""
+        from unittest.mock import patch
+
+        from kedro_azureml_pipeline.config import WorkspaceConfig
         from kedro_azureml_pipeline.hooks.local_run import AzureMLLocalRunHook
 
         mount = tmp_path / "mount"
         PickleDataset(filepath=str(mount / "table_a.pickle"), backend="cloudpickle").save(["row"])
-        from kedro_azureml_pipeline.config import WorkspaceConfig
-
+        ds = self._dataset()
+        catalog = DataCatalog({"input_data": ds})
         hook = AzureMLLocalRunHook()
         hook.azure_config = WorkspaceConfig(subscription_id="s", resource_group="r", name="w")
-        catalog = DataCatalog()
+        pipeline = dummy_pipeline.filter(node_names=["node1"])
+
         hook.after_catalog_created(catalog)
-        catalog["input_data"] = self._dataset()
+        hook.before_pipeline_run(run_params={"runner": runner_name}, pipeline=pipeline, catalog=catalog)
+
+        assert catalog["input_data"] is ds
+        assert ds.root_dir == "data"
+        assert ds.workspace is None
         runner = AzurePipelinesRunner(data_paths={"input_data": str(mount), "i2": str(tmp_path / "i2")})
-        runner.run(dummy_pipeline.filter(node_names=["node1"]), catalog)
+        with patch(
+            "kedro_azureml_pipeline.datasets.datastore_dataset.artifact_utils.download_artifact_from_aml_uri"
+        ) as download:
+            runner.run(pipeline, catalog)
+        download.assert_not_called()
         assert PickleDataset(filepath=str(tmp_path / "i2" / "i2.pickle"), backend="cloudpickle").load() == ["row"]
 
 

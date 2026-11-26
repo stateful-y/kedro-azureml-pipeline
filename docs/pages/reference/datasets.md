@@ -75,12 +75,12 @@ frozen_prices:
 | Property | Returns | Description |
 |---|---|---|
 | `uri` | `str` | `azureml://datastores/<datastore>/paths/<datastore_path>`. |
-| `path` | `Path` | Combined `root_dir` and underlying filepath. |
+| `path` | `Path` | Underlying filepath inside the mounted folder in a job, else inside `<root_dir>/<datastore>/<datastore_path>`. |
 
 ### Behavior
 
 - **Remote runs**: the generator passes `uri` as a `uri_folder` input of the step and adds `--az-input`, and [`AzurePipelinesRunner`][kedro_azureml_pipeline.runner.AzurePipelinesRunner] sets `root_dir` to the mounted folder. No download occurs.
-- **Local runs**: the first `_load()` downloads the folder to `root_dir` with the workspace given in `workspace`. A later load reads the local copy.
+- **Local runs**: the first `_load()` downloads the folder to `<root_dir>/<datastore>/<datastore_path>` with the workspace given in `workspace`, so two entries never share a local copy. A later load reads the local copy; delete that folder to download it again.
 - **No hook needed**: the dataset holds its own workspace, so an entry added to the catalog after the plugin's hooks ran works the same way.
 - **Input only**: `_save()` raises, and the generator refuses the dataset as an output or between two steps.
 

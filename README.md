@@ -31,6 +31,7 @@ Two deployment workflows are supported, both backed by Azure ML Environments:
 | **Named jobs** | Define multiple jobs in `azureml.yml`, each targeting a different pipeline, compute, or workspace |
 | **Scheduling** | Attach cron or recurrence schedules to jobs for recurring Azure ML pipeline runs |
 | **Data assets** | `AzureMLAssetDataset` for reading/writing Azure ML `uri_file` and `uri_folder` data assets |
+| **Datastore inputs** | `AzureMLDatastoreDataset` for reading a datastore folder by its path, with no data asset |
 | **Distributed training** | `@distributed_job` decorator with PyTorch, TensorFlow, and MPI backends |
 | **MLflow integration** | Optional hook that wires Kedro-MLFlow to log under the correct Azure ML experiment |
 | **Multiple workspaces** | Named workspace definitions with a `__default__` fallback |
