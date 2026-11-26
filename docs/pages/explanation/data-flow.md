@@ -6,10 +6,11 @@ Azure ML changes this picture. Each Kedro node runs as a separate pipeline step 
 
 ## How datasets behave during remote execution
 
-The plugin only needs to intervene for datasets that depend on a shared local filesystem. Datasets that manage their own storage (databases, cloud services, APIs) work unchanged because each container can reach them independently. This splits catalog entries into three categories:
+The plugin only needs to intervene for datasets that depend on a shared local filesystem. Datasets that manage their own storage (databases, cloud services, APIs) work unchanged because each container can reach them independently. This splits catalog entries into four categories:
 
 - **[`AzureMLPipelineDataset`][kedro_azureml_pipeline.datasets.AzureMLPipelineDataset]**: intermediate data mounted between steps through temporary Azure ML storage.
 - **[`AzureMLAssetDataset`][kedro_azureml_pipeline.datasets.AzureMLAssetDataset]**: versioned Data Assets registered in Azure ML.
+- **[`AzureMLDatastoreDataset`][kedro_azureml_pipeline.datasets.AzureMLDatastoreDataset]**: input folders read by their datastore path, with no Data Asset.
 - **Standard Kedro datasets**: any dataset not wrapped by the plugin (`ibis.TableDataset`, `pandas.SQLTableDataset`, `yaml.YAMLDataset`, S3/GCS/ABFS-backed datasets, etc.). These work without any plugin intervention. Datasets that connect to external services reach them directly from each step container, and datasets with local file paths travel inside the code snapshot the plugin uploads with each step.
 
 ### Mounted temporary storage (AzureMLPipelineDataset)
@@ -50,12 +51,13 @@ Datasets with local file paths (e.g. `yaml.YAMLDataset` pointing at `conf/parame
 | [`AzureMLPipelineDataset`][kedro_azureml_pipeline.datasets.AzureMLPipelineDataset] | Reads/writes to `{root_dir}/{filepath}` as a normal file | Runner rewires `root_dir` to Azure ML mount path |
 | [`AzureMLAssetDataset`][kedro_azureml_pipeline.datasets.AzureMLAssetDataset] (input) | Downloads from Azure ML, caches locally | Runner rewires `root_dir` to Azure ML asset path |
 | [`AzureMLAssetDataset`][kedro_azureml_pipeline.datasets.AzureMLAssetDataset] (intermediate) | Saves locally with a `"local"` version, no download | Runner rewires `root_dir`, disables local-run logic |
+| [`AzureMLDatastoreDataset`][kedro_azureml_pipeline.datasets.AzureMLDatastoreDataset] (input only) | Downloads the folder once to `{root_dir}/{datastore}/{datastore_path}` | Runner rewires `root_dir` to the mounted datastore folder |
 | Standard Kedro dataset | Normal behavior (external connection, local file I/O, etc.) | Same behavior, no plugin intervention |
 
 The key insight is that the plugin only intervenes for datasets that need inter-step coordination through Azure ML storage. Everything else, whether it is a database connection, a cloud storage path, or a config file in the code snapshot, works the same as during a local run.
 
 ## Connections
 
-- [How to use data assets](../how-to/use-data-assets.md): practical guidance on configuring both plugin dataset types
+- [How to use data assets](../how-to/use-data-assets.md): practical guidance on choosing and configuring the plugin dataset types
 - [Dataset reference](../reference/datasets.md): full parameter tables for [`AzureMLPipelineDataset`][kedro_azureml_pipeline.datasets.AzureMLPipelineDataset] and [`AzureMLAssetDataset`][kedro_azureml_pipeline.datasets.AzureMLAssetDataset]
 - [Architecture overview](architecture.md): broader context on how data flow fits into the plugin's design

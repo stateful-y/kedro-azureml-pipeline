@@ -977,3 +977,60 @@ class TestNotificationStamping:
             )
             definition = json.loads(generator.generate().jobs["node1"].environment_variables[KEDRO_AZUREML_NOTIFY])
         assert definition["display_name"] == "job-a"
+
+
+class TestDatastoreInputs:
+    """An ``AzureMLDatastoreDataset`` input compiles to its datastore path."""
+
+    @staticmethod
+    def _catalog():
+        from kedro.io import DataCatalog
+        from kedro_datasets.pickle import PickleDataset
+
+        from kedro_azureml_pipeline.datasets import AzureMLDatastoreDataset
+
+        return DataCatalog({
+            "input_data": AzureMLDatastoreDataset(
+                datastore="shared_store",
+                datastore_path="ercot/label-name/table_a",
+                dataset={"type": PickleDataset, "filepath": "table_a.pickle"},
+            )
+        })
+
+    def test_input_is_the_datastore_path_with_az_input(self, dummy_pipeline, dummy_plugin_config):
+        """The step gets the datastore URI as a folder input, and its command names it with ``--az-input``."""
+        with patch.object(AzureMLPipelineGenerator, "get_kedro_pipeline", return_value=dummy_pipeline):
+            job = AzureMLPipelineGenerator("test", "local", dummy_plugin_config, {}, catalog=self._catalog()).generate()
+        step = job.jobs["node1"]
+        assert step.inputs["input_data"].path == "azureml://datastores/shared_store/paths/ercot/label-name/table_a"
+        assert step.inputs["input_data"].type == "uri_folder"
+        assert "--az-input=input_data ${{inputs.input_data}}" in step.command
+
+    def test_intermediate_use_raises(self, dummy_pipeline, dummy_plugin_config):
+        """A datastore dataset between two nodes is refused."""
+        generator = AzureMLPipelineGenerator("test", "local", dummy_plugin_config, {}, catalog=self._catalog())
+        generator.catalog["i2"] = generator.catalog["input_data"]
+        with pytest.raises(ValueError, match="can only be used as pipeline inputs"):
+            generator._get_input("i2", dummy_pipeline)
+
+    def test_output_raises(self, dummy_plugin_config):
+        """A datastore dataset cannot be an output."""
+        generator = AzureMLPipelineGenerator("test", "local", dummy_plugin_config, {}, catalog=self._catalog())
+        with pytest.raises(ValueError, match="cannot be used as outputs"):
+            generator._get_output("input_data")
+
+
+class TestOtherOutputs:
+    """Outputs of other dataset classes compile to a folder with no name and no path."""
+
+    def test_memory_dataset_output_is_an_unnamed_folder(self, dummy_plugin_config):
+        """A ``MemoryDataset`` output becomes an unnamed ``uri_folder`` output."""
+        from kedro.io import DataCatalog, MemoryDataset
+
+        catalog = DataCatalog({"output_data": MemoryDataset()})
+        output = AzureMLPipelineGenerator("test", "local", dummy_plugin_config, {}, catalog=catalog)._get_output(
+            "output_data"
+        )
+        assert output.type == "uri_folder"
+        assert output.name is None
+        assert output.path is None

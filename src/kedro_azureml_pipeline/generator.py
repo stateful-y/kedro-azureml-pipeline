@@ -41,7 +41,7 @@ from kedro_azureml_pipeline.constants import (
     KEDRO_AZUREML_NOTIFY_START,
     PARAMS_PREFIX,
 )
-from kedro_azureml_pipeline.datasets import AzureMLAssetDataset
+from kedro_azureml_pipeline.datasets import AzureMLAssetDataset, AzureMLDatastoreDataset
 from kedro_azureml_pipeline.distributed import DistributedNodeConfig
 from kedro_azureml_pipeline.distributed.config import Framework
 
@@ -460,10 +460,14 @@ class AzureMLPipelineGenerator:
         Raises
         ------
         ValueError
-            If a ``uri_file`` asset is used outside pipeline inputs.
+            If a ``uri_file`` asset or an ``AzureMLDatastoreDataset`` is used outside pipeline inputs.
         """
         if self._is_param_or_root_non_azureml_asset_dataset(dataset_name, pipeline):
             return Input(type="string")
+        elif dataset_name in self.catalog and isinstance(self.catalog[dataset_name], AzureMLDatastoreDataset):
+            if dataset_name not in pipeline.inputs():
+                raise ValueError("AzureMLDatastoreDatasets can only be used as pipeline inputs")
+            return Input(type="uri_folder")
         elif dataset_name in self.catalog and isinstance(ds := self.catalog[dataset_name], AzureMLAssetDataset):
             if ds._azureml_type == "uri_file" and dataset_name not in pipeline.inputs():
                 raise ValueError(
@@ -489,8 +493,10 @@ class AzureMLPipelineGenerator:
         Raises
         ------
         ValueError
-            If a ``uri_file`` asset is used as an output.
+            If a ``uri_file`` asset or an ``AzureMLDatastoreDataset`` is used as an output.
         """
+        if name in self.catalog and isinstance(self.catalog[name], AzureMLDatastoreDataset):
+            raise ValueError("AzureMLDatastoreDatasets cannot be used as outputs")
         if name in self.catalog and isinstance(ds := self.catalog[name], AzureMLAssetDataset):
             if ds._azureml_type == "uri_file":
                 raise ValueError("AzureMLAssetDatasets with azureml_type 'uri_file' cannot be used as outputs")
@@ -561,7 +567,7 @@ class AzureMLPipelineGenerator:
         return dataset_name.startswith(PARAMS_PREFIX) or (
             dataset_name in pipeline.inputs()
             and dataset_name in self.catalog
-            and not isinstance(self.catalog[dataset_name], AzureMLAssetDataset)
+            and not isinstance(self.catalog[dataset_name], (AzureMLAssetDataset, AzureMLDatastoreDataset))
         )
 
     def _construct_azure_command(
@@ -728,7 +734,10 @@ class AzureMLPipelineGenerator:
                         type=ds._azureml_type,
                         path=self._get_versioned_azureml_dataset_name(node_input, ds._azureml_dataset),
                     )
-                # 3. if not found, provide dummy input
+                # 3. read a datastore folder by its path
+                elif node_input in self.catalog and isinstance(ds := self.catalog[node_input], AzureMLDatastoreDataset):
+                    azure_inputs[sanitized_input_name] = Input(type="uri_folder", path=ds.uri)
+                # 4. if not found, provide dummy input
                 else:
                     azure_inputs[sanitized_input_name] = node_input
             invoked_components[node.name] = commands[node.name](**azure_inputs)

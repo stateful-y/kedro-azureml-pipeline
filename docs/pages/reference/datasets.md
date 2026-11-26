@@ -1,6 +1,6 @@
 # Dataset Reference
 
-Catalog examples and runtime behavior for the two dataset types provided by the plugin. For full constructor signatures and parameter details, see the auto-generated API pages: [`AzureMLAssetDataset`][kedro_azureml_pipeline.datasets.AzureMLAssetDataset] and [`AzureMLPipelineDataset`][kedro_azureml_pipeline.datasets.AzureMLPipelineDataset].
+Catalog examples and runtime behavior for the three dataset types provided by the plugin. For full constructor signatures and parameter details, see the auto-generated API pages: [`AzureMLAssetDataset`][kedro_azureml_pipeline.datasets.AzureMLAssetDataset], [`AzureMLDatastoreDataset`][kedro_azureml_pipeline.datasets.AzureMLDatastoreDataset] and [`AzureMLPipelineDataset`][kedro_azureml_pipeline.datasets.AzureMLPipelineDataset].
 
 ---
 
@@ -44,6 +44,48 @@ model_inputs:
 
 ---
 
+## `AzureMLDatastoreDataset`
+
+```text
+kedro_azureml_pipeline.datasets.AzureMLDatastoreDataset
+```
+
+Input-only dataset that reads a folder of an Azure ML datastore, named by the datastore and a path inside it. No data asset is involved.
+
+Inherits from [`AzureMLPipelineDataset`][kedro_azureml_pipeline.datasets.AzureMLPipelineDataset].
+
+### Catalog example
+
+```yaml
+frozen_prices:
+  type: kedro_azureml_pipeline.datasets.AzureMLDatastoreDataset
+  datastore: "shared_store"
+  datastore_path: "market-name/label-name/table-name"
+  workspace:
+    subscription_id: "<subscription-id>"
+    resource_group: "<resource-group>"
+    name: "<workspace>"
+  dataset:
+    type: pandas.ParquetDataset
+    filepath: "table-name.parquet"
+```
+
+### Properties
+
+| Property | Returns | Description |
+|---|---|---|
+| `uri` | `str` | `azureml://datastores/<datastore>/paths/<datastore_path>`. |
+| `path` | `Path` | Underlying filepath inside the mounted folder in a job, else inside `<root_dir>/<datastore>/<datastore_path>`. |
+
+### Behavior
+
+- **Remote runs**: the generator passes `uri` as a `uri_folder` input of the step and adds `--az-input`, and [`AzurePipelinesRunner`][kedro_azureml_pipeline.runner.AzurePipelinesRunner] sets `root_dir` to the mounted folder. No download occurs.
+- **Local runs**: the first `_load()` downloads the folder to `<root_dir>/<datastore>/<datastore_path>` with the workspace given in `workspace`, so two entries never share a local copy. A later load reads the local copy; delete that folder to download it again.
+- **No hook needed**: the dataset holds its own workspace, so an entry added to the catalog after the plugin's hooks ran works the same way.
+- **Input only**: `_save()` raises, and the generator refuses the dataset as an output or between two steps.
+
+---
+
 ## `AzureMLPipelineDataset`
 
 ```text
@@ -83,4 +125,4 @@ intermediate_features:
 
 - [How to use data assets](../how-to/use-data-assets.md) for usage guidance and examples
 - [Architecture overview](../explanation/architecture.md#data-flow-between-steps) for how data flows between pipeline steps
-- [`AzureMLAssetDataset`][kedro_azureml_pipeline.datasets.AzureMLAssetDataset] and [`AzureMLPipelineDataset`][kedro_azureml_pipeline.datasets.AzureMLPipelineDataset] API for full constructor signatures
+- [`AzureMLAssetDataset`][kedro_azureml_pipeline.datasets.AzureMLAssetDataset], [`AzureMLDatastoreDataset`][kedro_azureml_pipeline.datasets.AzureMLDatastoreDataset] and [`AzureMLPipelineDataset`][kedro_azureml_pipeline.datasets.AzureMLPipelineDataset] API for full constructor signatures

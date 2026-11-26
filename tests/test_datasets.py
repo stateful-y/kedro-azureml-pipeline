@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 from azure.core.exceptions import ResourceNotFoundError
+from kedro.io import DataCatalog
 from kedro.io.core import VERSIONED_FLAG_KEY, DatasetError, Version
 from kedro_datasets.pandas import ParquetDataset
 from kedro_datasets.pickle import PickleDataset
@@ -552,3 +553,136 @@ class TestAzureMLPipelineDataset:
         ):
             ds.save("data")
         assert not (tmp_path / "no_save.pickle").exists()
+
+
+class TestAzureMLDatastoreDataset:
+    """``AzureMLDatastoreDataset`` reads a datastore folder by its path."""
+
+    @staticmethod
+    def _entry(**extra):
+        return {
+            "type": "kedro_azureml_pipeline.datasets.AzureMLDatastoreDataset",
+            "datastore": "shared_store",
+            "datastore_path": "/ercot/label-name/table_a/",
+            "dataset": {"type": "pickle.PickleDataset", "filepath": "table_a.pickle"},
+            **extra,
+        }
+
+    def test_builds_from_a_catalog_entry(self):
+        """A catalog entry gives the datastore, the path without slashes, and the URI."""
+        from kedro_azureml_pipeline.datasets import AzureMLDatastoreDataset
+
+        catalog = DataCatalog.from_config({"table_a": self._entry()})
+        ds = catalog["table_a"]
+
+        assert isinstance(ds, AzureMLDatastoreDataset)
+        assert ds.datastore == "shared_store"
+        assert ds.datastore_path == "ercot/label-name/table_a"
+        assert ds.uri == "azureml://datastores/shared_store/paths/ercot/label-name/table_a"
+
+    @pytest.mark.parametrize(("datastore", "datastore_path"), [("", "a/b"), ("store", ""), ("store", "/")])
+    def test_refuses_an_empty_datastore_or_path(self, datastore, datastore_path):
+        """A missing datastore name or path refuses at creation."""
+        from kedro_azureml_pipeline.datasets import AzureMLDatastoreDataset
+
+        with pytest.raises(DatasetError, match="needs a datastore name and a path"):
+            AzureMLDatastoreDataset(
+                datastore=datastore,
+                datastore_path=datastore_path,
+                dataset={"type": PickleDataset, "filepath": "x.pickle"},
+            )
+
+    def test_refuses_a_save(self):
+        """The dataset is an input only."""
+        from kedro_azureml_pipeline.datasets import AzureMLDatastoreDataset
+
+        ds = AzureMLDatastoreDataset(
+            datastore="store", datastore_path="a", dataset={"type": PickleDataset, "filepath": "x.pickle"}
+        )
+        with pytest.raises(DatasetError, match="input only"):
+            ds.save([1])
+
+    def test_load_outside_a_job_downloads_the_folder(self, tmp_path: Path):
+        """Outside a job, the first load downloads the folder under ``root_dir/<datastore>/<path>``."""
+        from kedro_azureml_pipeline.datasets import AzureMLDatastoreDataset
+
+        def fake_download(uri, destination, datastore_operation):
+            PickleDataset(filepath=str(Path(destination) / "table_a.pickle")).save(["row"])
+
+        ds = AzureMLDatastoreDataset(
+            datastore="shared_store",
+            datastore_path="ercot/label-name/table_a",
+            dataset={"type": PickleDataset, "filepath": "table_a.pickle"},
+            workspace={"subscription_id": "s", "resource_group": "r", "name": "w"},
+            root_dir=str(tmp_path / "local"),
+        )
+        with (
+            patch("kedro_azureml_pipeline.datasets.datastore_dataset._get_azureml_client") as client,
+            patch(
+                "kedro_azureml_pipeline.datasets.datastore_dataset.artifact_utils.download_artifact_from_aml_uri",
+                side_effect=fake_download,
+            ) as download,
+        ):
+            assert ds.load() == ["row"]
+
+        assert download.call_args.kwargs["uri"] == "azureml://datastores/shared_store/paths/ercot/label-name/table_a/"
+        assert download.call_args.kwargs["destination"] == str(tmp_path / "local/shared_store/ercot/label-name/table_a")
+        assert client.call_args.kwargs["config"].name == "w"
+
+    @staticmethod
+    def _local(datastore_path: str, root_dir: Path):
+        from kedro_azureml_pipeline.datasets import AzureMLDatastoreDataset
+
+        return AzureMLDatastoreDataset(
+            datastore="shared_store",
+            datastore_path=datastore_path,
+            dataset={"type": PickleDataset, "filepath": "table.pickle"},
+            workspace={"subscription_id": "s", "resource_group": "r", "name": "w"},
+            root_dir=str(root_dir),
+        )
+
+    @staticmethod
+    def _fake_download(uri, destination, datastore_operation):
+        PickleDataset(filepath=str(Path(destination) / "table.pickle")).save([uri])
+
+    def test_two_paths_with_the_same_filepath_load_their_own_data(self, tmp_path: Path):
+        """Two entries that share ``root_dir`` and filepath each download and read their own folder."""
+        market_a = self._local("market_a/prices", tmp_path)
+        market_b = self._local("market_b/prices", tmp_path)
+        with (
+            patch("kedro_azureml_pipeline.datasets.datastore_dataset._get_azureml_client"),
+            patch(
+                "kedro_azureml_pipeline.datasets.datastore_dataset.artifact_utils.download_artifact_from_aml_uri",
+                side_effect=self._fake_download,
+            ) as download,
+        ):
+            assert market_a.load() == ["azureml://datastores/shared_store/paths/market_a/prices/"]
+            assert market_b.load() == ["azureml://datastores/shared_store/paths/market_b/prices/"]
+        assert download.call_count == 2
+
+    def test_a_later_load_reads_the_local_copy(self, tmp_path: Path):
+        """Only the first load outside a job downloads the folder."""
+        ds = self._local("market_a/prices", tmp_path)
+        with (
+            patch("kedro_azureml_pipeline.datasets.datastore_dataset._get_azureml_client"),
+            patch(
+                "kedro_azureml_pipeline.datasets.datastore_dataset.artifact_utils.download_artifact_from_aml_uri",
+                side_effect=self._fake_download,
+            ) as download,
+        ):
+            first = ds.load()
+            assert ds.load() == first
+        assert download.call_count == 1
+
+    def test_load_outside_a_job_without_a_workspace_refuses(self, tmp_path: Path):
+        """A download needs the workspace of the datastore."""
+        from kedro_azureml_pipeline.datasets import AzureMLDatastoreDataset
+
+        ds = AzureMLDatastoreDataset(
+            datastore="store",
+            datastore_path="a",
+            dataset={"type": PickleDataset, "filepath": "x.pickle"},
+            root_dir=str(tmp_path),
+        )
+        with pytest.raises(DatasetError, match="has no workspace"):
+            ds.load()
